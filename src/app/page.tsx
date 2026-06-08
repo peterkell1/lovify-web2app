@@ -17,7 +17,7 @@ export default function Home() {
       </p>
 
       <div className="mt-10">
-        <Link href="/onboarding">
+        <Link href="/start">
           <Button>Get started</Button>
         </Link>
       </div>
