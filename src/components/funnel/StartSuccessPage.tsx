@@ -4,6 +4,7 @@ import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import { initMetaPixel, trackPixel, getWebAttribution } from '@/lib/metaPixel';
 import { capturePostHogEvent } from '@/lib/posthog';
 import { readOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
+import { clearSnapshot, clearStoredSessionId } from '@/components/onboarding/v3/session';
 const appStoreBadge = '/assets/app-store-badge.svg';
 
 /**
@@ -60,7 +61,19 @@ export default function StartSuccessPage() {
     // Safety net: claim the staged onboarding song for the just-authenticated
     // user. The email path already claims on the account page (this is a no-op
     // then); the Apple-OAuth path bounces straight here, so it claims now.
+    // Reads from sessionStorage (lov-onboarding-claim-fs), which is independent
+    // of the session id cleared below — so order here is safe.
     claimOnboardingSession(readOnboardingSessionId());
+    // Purchase is complete — wipe the funnel snapshot so navigating back to
+    // /start begins a fresh run instead of resuming on the paywall step.
+    clearSnapshot('web');
+    // CRITICAL: also drop the stored onboarding session id. It's the RevenueCat
+    // App User ID the purchase was bound to. If we leave it, the NEXT person on
+    // this browser reuses the same id, so RC sees an active subscription and
+    // waves them through to success WITHOUT charging — they ride on this buyer's
+    // sub. Clearing it forces ensureSession() to mint a fresh id (= a new,
+    // un-entitled RC identity) for the next user, so they must actually pay.
+    clearStoredSessionId();
   }, []);
   return (
     <div style={{ height: '100dvh' }}>

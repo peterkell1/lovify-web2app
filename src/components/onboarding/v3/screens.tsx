@@ -562,7 +562,7 @@ function GlassPanel({ side }: { side: 'left' | 'right' }) {
 // Cycles through all three benefit promises once, then auto-advances — no
 // Continue button. The headline reveals slowly so it's easy to read.
 const BENEFIT_HOLD = 2000; // ms each benefit stays on screen
-export function V3_DrugHook({ onNext, onBack, onSkip, autoAdvanceOnly }: NavProps & { autoAdvanceOnly?: boolean }) {
+export function V3_DrugHook({ onNext, onBack, onSkip }: NavProps & { autoAdvanceOnly?: boolean }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     // Let the slow headline land first, then start cycling benefits.
@@ -619,14 +619,12 @@ export function V3_DrugHook({ onNext, onBack, onSkip, autoAdvanceOnly }: NavProp
           </FloatBreathe>
         </motion.div>
       </div>
-      {/* Auto-advances after all 3 benefits. The app shows a Continue CTA to let
-          users move ahead immediately; the web funnel (autoAdvanceOnly) hides it
-          so the screen plays as a passive, cinematic intro that self-advances. */}
-      {!autoAdvanceOnly && (
-        <div style={{ position: 'relative', padding: '0 24px 30px', flexShrink: 0 }}>
-          <LovPrimary onClick={onNext}>Continue</LovPrimary>
-        </div>
-      )}
+      {/* Auto-advances after all 3 benefits, but the Continue CTA is always
+          shown (app + web) so users can move ahead immediately instead of
+          waiting out the cinematic intro. */}
+      <div style={{ position: 'relative', padding: '0 24px 30px', flexShrink: 0 }}>
+        <LovPrimary onClick={onNext}>Continue</LovPrimary>
+      </div>
     </LovScreen>
   );
 }
@@ -1671,7 +1669,6 @@ export function V3_Familiarity({ value, setValue, onNext, onBack }: SingleProps)
     { e: '🎯', l: "Yeah — I feel it daily" },
     { e: '💯', l: "It runs my whole mood" },
   ];
-  const pick = (l: string) => { setValue(l); onNext?.(); };
   return (
     <LovScreen>
       <LovBack onClick={onBack} />
@@ -1683,7 +1680,7 @@ export function V3_Familiarity({ value, setValue, onNext, onBack }: SingleProps)
         {opts.map((o) => (
           <button
             key={o.l}
-            onClick={() => pick(o.l)}
+            onClick={() => setValue(o.l)}
             style={{
               width: '100%', textAlign: 'left', cursor: 'pointer',
               padding: '16px 18px', borderRadius: 18,
@@ -1700,6 +1697,9 @@ export function V3_Familiarity({ value, setValue, onNext, onBack }: SingleProps)
         ))}
       </div>
       <div style={{ flex: 1 }} />
+      <div style={{ padding: '0 22px 30px', flexShrink: 0 }}>
+        <LovPrimary disabled={!value} onClick={onNext}>Continue</LovPrimary>
+      </div>
     </LovScreen>
   );
 }
@@ -2003,7 +2003,6 @@ export function V3_Referral({ value, setValue, onNext, onBack, onSkip }: SingleP
     { e: '🚀', l: 'Founder' },
     { e: '🔎', l: 'A friend / found it myself' },
   ];
-  const pick = (l: string) => { setValue(l); onNext?.(); };
   return (
     <LovScreen>
       <LovBack onClick={onBack} />
@@ -2017,7 +2016,7 @@ export function V3_Referral({ value, setValue, onNext, onBack, onSkip }: SingleP
         {opts.map((o) => (
           <button
             key={o.l}
-            onClick={() => pick(o.l)}
+            onClick={() => setValue(o.l)}
             style={{
               width: '100%', textAlign: 'left', cursor: 'pointer',
               padding: '15px 18px', borderRadius: 18,
@@ -2034,6 +2033,9 @@ export function V3_Referral({ value, setValue, onNext, onBack, onSkip }: SingleP
         ))}
       </div>
       <div style={{ flex: 1 }} />
+      <div style={{ padding: '0 22px 30px', flexShrink: 0 }}>
+        <LovPrimary disabled={!value} onClick={onNext}>Continue</LovPrimary>
+      </div>
     </LovScreen>
   );
 }

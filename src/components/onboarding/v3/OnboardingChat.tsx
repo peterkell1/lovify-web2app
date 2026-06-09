@@ -382,8 +382,14 @@ export function V3_Chat({
 
   // ── Kick off the conversation once — but ONLY on a fresh start. When we're
   // restoring a saved conversation, skip the intro so we don't replay it. ──
+  // The ref guard makes the intro fire exactly once even under React
+  // StrictMode's intentional double-mount in dev (otherwise the seed messages
+  // get appended twice).
+  const seededRef = useRef(false);
   useEffect(() => {
     if (persisted && persisted.msgs.length) return; // resuming — keep transcript as-is
+    if (seededRef.current) return; // already seeded (StrictMode remount) — don't replay
+    seededRef.current = true;
     botSay(
       [
         web
