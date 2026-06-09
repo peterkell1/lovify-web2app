@@ -1133,7 +1133,7 @@ const DEMO_SCRIPT: DemoEvent[] = [
 // app's DEMO_SCRIPT is never touched). Warmer, value-led copy throughout, with
 // lyrics tuned to the "one life — be fearless on stage" dream acted out here.
 const WEB_DEMO_SCRIPT: DemoEvent[] = [
-  { who: 'bot', text: "Hey, I'm Lovify. 👋 Here's an example of how you can create music that helps you become who you're meant to be." },
+  { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you how this works." },
   { who: 'bot', text: "What do you want to improve about your life?" },
   { who: 'user', reply: "I want to feel confident and finally believe in myself." },
   { who: 'bot', text: "Love that. Paint me the picture — what does it look like?" },
