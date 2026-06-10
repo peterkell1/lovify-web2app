@@ -1152,8 +1152,10 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'user', reply: "Get her body moving again" },
   { who: 'user', reply: "Plan the life she actually wants" },
   { who: 'bot', text: "That's the comeback plan. Step 3 — if it all changed, what's the most amazing life you can imagine?" },
-  { who: 'user', reply: "Book the trip. Wear the dress." },
-  { who: 'user', reply: "My daughter saying — mama, you're glowing ✨" },
+  // Three universal dream beats the average person would actually say.
+  { who: 'user', reply: "Waking up excited for my day" },
+  { who: 'user', reply: "Proud of what I see in the mirror" },
+  { who: 'user', reply: "My family saying I seem happier ✨" },
   { who: 'bot', text: "Beautiful. Add your photo so you can see her — the you you're coming back to." },
   { who: 'user', reply: '📷 Add photo', photo: nursePhoto },
   { who: 'bot', text: "Perfect 🙌 What's the energy of your comeback song?" },
