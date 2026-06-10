@@ -533,7 +533,7 @@ export function V3_Chat({
       // The method was already taught on the "comeback song" screen — dive in.
       botSay([
         `Nice to meet you, ${fn}.`,
-        `Let's start by getting it out — what's paining you the most in your life right now? Reply with 4 pain points in specific detail, so we can capture exactly where you are.`,
+        `Let's start by getting it out 😤 What are 4 things you hate about your life right now? Tell me in specific detail`,
       ], 'text');
     } else if (phase === 'pain') {
       // Pain → DREAM next (best case first — it's lighter, and the steps feel

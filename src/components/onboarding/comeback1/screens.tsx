@@ -1140,7 +1140,7 @@ const DEMO_SCRIPT: DemoEvent[] = [
 // so the demo teaches the user exactly what's about to happen to them.
 const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you an example of how to make your first Comeback Song." },
-  { who: 'bot', text: "Step 1 — vent it. What's paining you the most in life right now?" },
+  { who: 'bot', text: "Step 1 — vent it 😤 What do you hate about your life right now?" },
   // Rapid-fire venting: three short chips in a row, in the raw voice of someone
   // who's actually pissed off — so the viewer imagines firing off their own.
   { who: 'user', reply: "I work my ass off and I'm still drowning" },
