@@ -112,7 +112,7 @@ const initialState: FlowState = {
 // make-song → song chat → paywall (benefits → 7-days-free → reminder → price →
 // plans) → create account.
 
-export function OnboardingComeback1Flow({ mode = 'app' }: { mode?: 'app' | 'web' } = {}) {
+export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app' | 'web'; startAt?: string } = {}) {
   // Active step list for this surface: the full app flow, or the trimmed web
   // funnel. TOTAL + the switch() both key off this, so adding/removing a screen
   // is a one-line change to APP_STEP_IDS / WEB_OMIT.
@@ -143,7 +143,13 @@ export function OnboardingComeback1Flow({ mode = 'app' }: { mode?: 'app' | 'web'
   // step, same answers, same chat transcript — on web AND in the iOS app.
   const restored = useMemo(() => loadSnapshot<Partial<FlowState>, ChatPersist>(mode), [mode]);
 
-  const [step, setStep] = useState(() => restored?.step ?? 0); // 0-based index into the screens
+  // Deep-link entry (e.g. /song → startAt="song_chat"): start the run at that
+  // step. A saved run still resumes, but never BEFORE the deep-linked step —
+  // a share link should always land its recipient at the intended screen.
+  const [step, setStep] = useState(() => {
+    const startIndex = startAt ? Math.max(0, stepIds.indexOf(startAt)) : 0;
+    return Math.max(restored?.step ?? 0, startIndex);
+  }); // 0-based index into the screens
   const [dir, setDir] = useState(1); // 1 forward, -1 back
   // Merge over initialState so fields dropped from the snapshot (photos) are
   // present, and a future-added field defaults sanely on an older snapshot.
