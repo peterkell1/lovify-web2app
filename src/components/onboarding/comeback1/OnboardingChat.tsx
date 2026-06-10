@@ -198,25 +198,48 @@ It's closer than it's ever been
 
 [Final Chorus]
 I'm not just surviving — I'm living the life I choose
-This is my comeback, and I'm never looking back`;
+This is my comeback, and I'm never looking back
+
+[Outro]
+Tomorrow when my alarm goes off — press play
+Every morning, 'til every line comes true
+This is only chapter one… who will I become next?`;
 }
 
-// The comeback lyric structure, sent verbatim to creative-assistant via
-// generateLyrics({ promptOverride }) — the user answers 3 questions; the
-// prompt supplies the rest of the arc (root cause, turning point, becoming).
+// The comeback songwriting formula, sent verbatim to creative-assistant via
+// generateLyrics({ promptOverride }). The user answers 3 questions; this brief
+// supplies the rest: the narrative arc (root cause, turning point, becoming),
+// the earworm craft rules, and the ritual outro (never an ad-style CTA).
 function buildComebackLyricsPrompt(a: { name: string; pain: string; actions: string; dream: string }): string {
   return [
-    'Write my COMEBACK SONG — the true story of my life turning around. Follow this exact emotional arc, in this order:',
-    `1. THE LIFE I HATE (open the song here, in my own words): ${a.pain}`,
-    "2. ROOT CAUSE: I lost who I used to be — I forgot who I am. Make this land hard.",
-    '3. TURNING POINT: I found Lovify, made this song about who I\'m becoming, and now I press play every morning and rewire my mind.',
-    `4. PRACTICAL ACTION STEPS (show me DOING these — vivid little scenes): ${a.actions}`,
-    '5. BECOMING MY BEST SELF: the transformation building, day by day.',
-    `6. THE AMAZING LIFE I LIVE NOW (specific detail, in my words): ${a.dream}`,
-    '7. EMOTIONAL JOY: end with me fully alive — not just surviving, living the life I choose.',
-    `Write it in first person, weave in my exact words and details, and shift to present tense by the end.${a.name ? ` My name is ${a.name}.` : ''}`,
+    "Write my COMEBACK SONG — a radio-grade story song about my life turning around, written the way Taylor Swift writes: a narrative songwriter telling MY story with concrete little details, conversational lines and real emotional turns. Never generic self-help, never an ad.",
+    '',
+    'MY RAW MATERIAL (weave my exact words and images in):',
+    `• The life I hate right now: ${a.pain}`,
+    `• My way out — the actions I'd take: ${a.actions}`,
+    `• The life I'm walking into: ${a.dream}`,
+    a.name ? `• My name: ${a.name}` : '',
+    '',
+    'STORY ARC — in this exact order:',
+    '[Verse 1] THE LIFE I HATE — open mid-scene in a real moment, physical details from my own words (like "microwaved dinner, ate it standing up").',
+    "[Pre-Chorus] THE ROOT CAUSE — I lost who I used to be; I forgot who I am. Make it ache in two or three lines.",
+    "[Chorus] THE TURNING POINT — I made a song about who I'm becoming, and I press play every morning, rewiring my mind. This chorus carries THE HOOK.",
+    '[Verse 2] THE ACTION STEPS — show me DOING my plan as vivid mini-scenes (mornings, sweat, small wins), pulled from my own words.',
+    '[Bridge] BECOMING — the lift. The moment I catch myself already changed, and someone close to me notices.',
+    "[Final Chorus] THE AMAZING LIFE — the same hook, but now it's TRUE: shift to present tense, full joy, living the life I choose.",
+    "[Outro] THE RITUAL + WHAT'S NEXT — never a call-to-action. Instead: tomorrow when my alarm goes off I press play again — this song, every morning, until every line of it is true. Close with a warm wondering of who I'll become next… this song is only chapter one.",
+    '',
+    'EARWORM RULES — make it stick:',
+    '• ONE short title hook (2–5 words) repeated at least 4 times across the choruses and outro; it is also the song title.',
+    '• One singalong non-lexical hook (like "whoa-oh-oh") introduced in the first chorus and reused later.',
+    '• Choruses repeat with small escalations — promise tense early, present tense by the final chorus.',
+    '• Concrete nouns over abstractions. Short conversational lines a person could sing in the car. Internal rhyme that feels effortless, never forced.',
+    '• First person all the way through, in my voice.',
+    '',
+    'Never include "download", app-store language, or advertising of any kind — this is MY song.',
+    'Output ONLY the song sections and lyrics — no production notes, no commentary.',
     'Please write my song now.',
-  ].join('\n');
+  ].filter((l, i) => l !== '' || i > 0).join('\n');
 }
 
 // ── AI idea suggestions (Q2 actions / Q3 dreams) ──────────────────
@@ -589,7 +612,10 @@ export function V3_Chat({
       }),
     })
       .then((res) => {
-        d.lyrics = res.content; d.title = res.title;
+        // Strip any trailing production-note/commentary block — Mureka would
+        // sing it as lyrics otherwise. (The prompt forbids it too; belt+braces.)
+        d.lyrics = (res.content || '').replace(/\n\[(?:production|note|style note)[^\]]*\][\s\S]*$/i, '').trim();
+        d.title = res.title;
         if (res.style) d.soundStyle = res.style;
       })
       .catch(() => { d.lyrics = fallbackLyrics(d.pain, d.actions, d.dream); d.title = 'My Comeback'; })
