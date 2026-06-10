@@ -109,6 +109,50 @@ const COMEBACK_VISION_IDEAS: { e: string; t: string; prompt: string }[] = [
   { e: '🏔️', t: 'On a mountaintop — strong & free', prompt: 'as myself standing on a mountaintop at sunrise, arms open, strong and free, the hard chapter behind me, cinematic and triumphant' },
 ];
 
+// ── Engaging loaders: cycling status lines so waits feel like work happening,
+// not a stalled spinner. One set for the style suggestions, one for lyrics.
+const SOUND_LOADING_LINES = [
+  'Loading styles…',
+  'Listening to your story…',
+  'Matching sounds to your comeback…',
+  'Tuning the energy…',
+];
+const WRITING_LINES = [
+  'Reading your story…',
+  'Finding your comeback arc…',
+  'Creating your affirmations…',
+  'Installing the new beliefs…',
+  'Writing your action verses…',
+  'Polishing your chorus…',
+  'Making your comeback song…',
+];
+
+function LoaderLine({ lines, centered }: { lines: string[]; centered?: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((x) => (x + 1) % lines.length), 1900);
+    return () => clearInterval(t);
+  }, [lines.length]);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: centered ? 'center' : 'flex-start', gap: 10, padding: centered ? '14px 0' : '6px 2px' }}>
+      <svg width="18" height="18" viewBox="0 0 50 50" style={{ flexShrink: 0 }}>
+        <circle cx="25" cy="25" r="20" fill="none" stroke={LOVIFY.orange} strokeWidth="5" strokeLinecap="round" strokeDasharray="80 50">
+          <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.9s" repeatCount="indefinite" />
+        </circle>
+      </svg>
+      <motion.span
+        key={i}
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        style={{ fontFamily: SANS, fontSize: centered ? 14.5 : 13.5, fontWeight: 700, color: LOVIFY.orangeDeep }}
+      >
+        {lines[i]}
+      </motion.span>
+    </div>
+  );
+}
+
 function firstName(raw: string): string {
   const n = (raw || '').trim().split(/\s+/)[0] || '';
   // Title-case the first name.
@@ -499,7 +543,7 @@ export function V3_Chat({
       detail: data.current.detail, visionScene: idea.prompt,
     });
     setPhase('sound');
-    botSay([`Beautiful choice. 🎨`, `Now let's make your comeback sound like you. Which of these feels right, ${name}?`], 'soundLoading');
+    botSay([`Beautiful choice. 🎨`, `Now — what do you want your comeback song to sound like, ${name}?`], 'soundLoading');
   };
   // Free-typed vision — the user describes exactly how they want to look.
   const chooseVisionText = (override?: string) => {
@@ -513,7 +557,7 @@ export function V3_Chat({
       detail: data.current.detail, visionScene: value,
     });
     setPhase('sound');
-    botSay([`Love it — I can see it. 🎨`, `Now let's make it sound like you. Which of these feels right, ${name}?`], 'soundLoading');
+    botSay([`Love it — I can see it. 🎨`, `Now — what do you want your comeback song to sound like, ${name}?`], 'soundLoading');
   };
 
   // ── Sound vibe chosen (chip) or free-typed style ──
@@ -807,8 +851,8 @@ export function V3_Chat({
         )}
 
         {mode === 'soundLoading' && (
-          <div style={{ alignSelf: 'flex-start', padding: '6px 2px', fontFamily: SANS, fontSize: 13.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
-            ✨ Tuning sounds to your dream…
+          <div style={{ alignSelf: 'flex-start' }}>
+            <LoaderLine lines={SOUND_LOADING_LINES} />
           </div>
         )}
 
@@ -872,7 +916,7 @@ export function V3_Chat({
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}
             >
-              {mode === 'soundLoading' ? 'Tuning sounds to your dream…' : 'Lovify is typing…'}
+              {mode === 'soundLoading' ? 'Loading styles…' : 'Lovify is typing…'}
             </div>
             <button
               disabled
@@ -929,16 +973,7 @@ export function V3_Chat({
           />
         )}
 
-        {mode === 'writing' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 11, padding: '14px 0' }}>
-            <svg width="22" height="22" viewBox="0 0 50 50">
-              <circle cx="25" cy="25" r="20" fill="none" stroke={LOVIFY.orange} strokeWidth="5" strokeLinecap="round" strokeDasharray="80 50">
-                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.9s" repeatCount="indefinite" />
-              </circle>
-            </svg>
-            <span style={{ fontFamily: SANS, fontSize: 14.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>Writing your lyrics…</span>
-          </div>
-        )}
+        {mode === 'writing' && <LoaderLine lines={WRITING_LINES} centered />}
 
         {mode === 'lyricsReview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
