@@ -31,7 +31,7 @@ import { publicEnv } from '@/lib/env';
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
 
 type Phase =
-  | 'name' | 'pain' | 'actions' | 'dream'
+  | 'name' | 'pain' | 'dream' | 'actions'
   | 'photo' | 'visionScene' | 'sound' | 'voice'
   | 'writing' | 'lyricsReview' | 'generating';
 
@@ -275,11 +275,10 @@ async function suggestIdeas(body: { kind: 'actions' | 'dreams' | 'visions'; pain
 
 const clip = (s: unknown) => String(s ?? '').trim().slice(0, 60);
 
-/** Personalized reflection (the "I heard you" ack) + concrete action ideas
- *  for THEIR situation, grouped in categories named after their struggles. */
-async function suggestActionSections(pain: string): Promise<{ reflection: string; sections: IdeaSection[] }> {
-  const j = (await suggestIdeas({ kind: 'actions', pain })) as {
-    reflection?: string;
+/** Concrete action ideas bridging THEIR pain to THEIR dream, grouped in
+ *  categories named after their struggles. (Asked third, after the dream.) */
+async function suggestActionSections(pain: string, dream: string): Promise<IdeaSection[]> {
+  const j = (await suggestIdeas({ kind: 'actions', pain, dream })) as {
     categories?: { title?: string; ideas?: unknown[] }[];
   };
   const sections = (j.categories || [])
@@ -287,15 +286,16 @@ async function suggestActionSections(pain: string): Promise<{ reflection: string
     .map((c) => ({ title: clip(c.title), ideas: (c.ideas || []).map(clip).filter(Boolean).slice(0, 4) }))
     .filter((c) => c.ideas.length);
   if (!sections.length) throw new Error('empty categories');
-  return { reflection: String(j.reflection || '').trim().slice(0, 400), sections };
+  return sections;
 }
 
-/** Vivid best-case-scenario moments, specific to their pain + their plan. */
-async function suggestDreamSections(pain: string, actions: string): Promise<IdeaSection[]> {
-  const j = (await suggestIdeas({ kind: 'dreams', pain, actions })) as { ideas?: unknown[] };
+/** Personalized reflection (the "I heard you" ack) + vivid best-case-scenario
+ *  moments from their vent. (Asked second, right after the pain.) */
+async function suggestDreamSections(pain: string): Promise<{ reflection: string; sections: IdeaSection[] }> {
+  const j = (await suggestIdeas({ kind: 'dreams', pain })) as { reflection?: string; ideas?: unknown[] };
   const ideas = (j.ideas || []).map(clip).filter(Boolean).slice(0, 7);
   if (!ideas.length) throw new Error('empty ideas');
-  return [{ ideas }];
+  return { reflection: String(j.reflection || '').trim().slice(0, 400), sections: [{ ideas }] };
 }
 
 /** Personalized vision-image options of THEIR dream future (image step). */
@@ -497,16 +497,23 @@ export function V3_Chat({
     if (phase === 'dream') return dreamIdeas ?? FALLBACK_DREAM_IDEAS;
     return [];
   };
-  // Dream ideas may still be generating when the question lands — show a
-  // brainstorming loader briefly, then fall back to the static bank so the
-  // list always appears.
-  const [dreamIdeasTimedOut, setDreamIdeasTimedOut] = useState(false);
+  // Ideas may still be generating when a question lands (the actions call
+  // fires at the dream answer) — show a brainstorming loader briefly, then
+  // fall back to the static bank so the list always appears.
+  const [ideasTimedOut, setIdeasTimedOut] = useState(false);
   useEffect(() => {
-    if (phase !== 'dream' || dreamIdeas) return;
-    const t = window.setTimeout(() => setDreamIdeasTimedOut(true), 9000);
+    const waiting = (phase === 'actions' && !actionIdeas) || (phase === 'dream' && !dreamIdeas);
+    if (!waiting) return;
+    setIdeasTimedOut(false);
+    const t = window.setTimeout(() => setIdeasTimedOut(true), 9000);
     return () => window.clearTimeout(t);
-  }, [phase, dreamIdeas]);
-  const dreamIdeasPending = phase === 'dream' && !dreamIdeas && !dreamIdeasTimedOut;
+  }, [phase, actionIdeas, dreamIdeas]);
+  const ideasPending = !ideasTimedOut
+    && ((phase === 'actions' && !actionIdeas) || (phase === 'dream' && !dreamIdeas));
+  // Categorized lists (actions) render as a compact accordion: tap a category
+  // to open its ideas — far less overwhelming than 9 buttons at once.
+  const [openSection, setOpenSection] = useState<number | null>(null);
+  useEffect(() => { setOpenSection(null); }, [phase]);
 
   // ── Text answers (name / pain / actions / dream) ──
   // Accepts an explicit value so tapped "Help me…" ideas can move forward too.
@@ -526,18 +533,20 @@ export function V3_Chat({
       // The method was already taught on the "comeback song" screen — dive in.
       botSay([
         `Nice to meet you, ${fn}.`,
-        `Let's start by getting it out — what's paining you the most in your life right now? Reply in specific detail so we know exactly where we're starting from.`,
+        `Let's start by getting it out — what's paining you the most in your life right now? Reply with 4 pain points in specific detail, so we can capture exactly where you are.`,
       ], 'text');
     } else if (phase === 'pain') {
+      // Pain → DREAM next (best case first — it's lighter, and the steps feel
+      // easier once they can already see where they're going).
       data.current.pain = value;
       data.current.why = value; // legacy mapping for parent plumbing/analytics
-      setPhase('actions');
-      // The ack must prove we HEARD them — so it's AI-written from their exact
-      // words (the same call also brings the personalized action ideas).
-      // Typing dots run while it thinks; if it's slow/fails we ack claim-safe.
-      actionReqRef.current = true;
-      const req = suggestActionSections(value)
-        .then((r) => { setActionIdeas(r.sections); return r; })
+      setPhase('dream');
+      // The ack must prove we HEARD them — AI-written from their exact words
+      // (the same call also brings the personalized dream moments). Typing
+      // dots run while it thinks; if it's slow/fails we ack claim-safe.
+      dreamReqRef.current = true;
+      const req = suggestDreamSections(value)
+        .then((r) => { setDreamIdeas(r.sections); return r; })
         .catch(() => null);
       setMode('busy');
       const tid = nid();
@@ -546,40 +555,40 @@ export function V3_Chat({
       Promise.race([req, timeout]).then((r) => {
         setMsgs((m) => m.filter((x) => x.id !== tid));
         botSay([
-          (r && r.reflection) || `Thank you for being real with me, ${name}. Getting it all out is the first step — now we find the way out.`,
-          `If the best version of you took over tomorrow morning, what would they do — day by day — to climb out of this?`,
-          `Select a few ideas from the list below, or type your own at the bottom 👇`,
+          (r && r.reflection) || `Thank you for being real with me, ${name}. Getting it all out is the first step.`,
+          `Now flip it: imagine every bit of that is behind you. What's the most amazing life you can picture, ${name}?`,
+          `Select a few below, or type your own 👇`,
         ], 'text');
       });
-    } else if (phase === 'actions') {
-      data.current.actions = value;
-      data.current.detail = value; // legacy mapping
-      // Pre-warm the personalized dream ideas from their pain + plan.
-      if (!dreamReqRef.current) {
-        dreamReqRef.current = true;
-        suggestDreamSections(data.current.pain, value).then(setDreamIdeas).catch(() => { /* fallback bank covers it */ });
-      }
-      setPhase('dream');
-      botSay([
-        `That's the comeback plan — you already know the way back. 💪 Your song is going to plant it in your mind, every time you press play.`,
-        `Now imagine it worked — all of it. What's the most amazing life you can picture, ${name}?`,
-        `Select a few below, or type your own 👇`,
-      ], 'text');
     } else if (phase === 'dream') {
       data.current.dream = value;
       data.current.scene = value;             // legacy: the scene the vision falls back to
       data.current.songAbout = 'My comeback'; // legacy label for plumbing/analytics
+      // Pre-warm the personalized action ideas bridging their pain → dream.
+      if (!actionReqRef.current) {
+        actionReqRef.current = true;
+        suggestActionSections(data.current.pain, value).then(setActionIdeas).catch(() => { /* fallback bank covers it */ });
+      }
+      setPhase('actions');
+      botSay([
+        `Now THAT's a life worth fighting for. 🔥`,
+        `So how do we get you there? If the best version of you took over tomorrow morning, what would they do — day by day?`,
+        `Open a category below for ideas, or type your own 👇`,
+      ], 'text');
+    } else if (phase === 'actions') {
+      data.current.actions = value;
+      data.current.detail = value; // legacy mapping
       // Pre-warm the personalized VISION options (shown after the photo) from
       // everything they've told us — so the image choices depict THEIR dream.
       if (!visionReqRef.current) {
         visionReqRef.current = true;
-        suggestVisionIdeas(data.current.pain, data.current.actions, value)
+        suggestVisionIdeas(data.current.pain, value, data.current.dream)
           .then(setVisionIdeas)
           .catch(() => { /* static vision set covers it */ });
       }
       setPhase('photo');
       botSay([
-        `That's not a fantasy, ${name} — that's you, on the other side of the comeback.`,
+        `That's the comeback plan — you already know the way back. 💪 Your song is going to plant it in your mind, every time you press play.`,
         `Add a photo of yourself so you can SEE the you you're coming back to. (Add anyone else you want in the picture too.)`,
       ], 'photo');
     }
@@ -784,7 +793,8 @@ export function V3_Chat({
     setActionIdeas(null);
     setDreamIdeas(null);
     setVisionIdeas(null);
-    setDreamIdeasTimedOut(false);
+    setIdeasTimedOut(false);
+    setOpenSection(null);
     actionReqRef.current = false;
     dreamReqRef.current = false;
     visionReqRef.current = false;
@@ -876,7 +886,7 @@ export function V3_Chat({
             multi-select categories. Tapping a few AND typing combine into one
             answer when they hit ↑. */}
         {mode === 'text' && (phase === 'actions' || phase === 'dream') && (
-          dreamIdeasPending ? (
+          ideasPending ? (
             <div style={{ alignSelf: 'flex-start' }}>
               <LoaderLine lines={IDEA_LOADING_LINES} />
             </div>
@@ -888,11 +898,23 @@ export function V3_Chat({
               {currentIdeaSections().map((sec, si) => (
                 <div key={sec.title || si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {sec.title && (
-                    <div style={{ fontFamily: SANS, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.subSoft, padding: '4px 2px 0' }}>
-                      {sec.title}
-                    </div>
+                    <button
+                      onClick={() => setOpenSection(openSection === si ? null : si)}
+                      style={{
+                        textAlign: 'left', cursor: 'pointer', width: '100%',
+                        padding: '12px 15px', borderRadius: 16,
+                        background: openSection === si ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
+                        border: `1.5px solid ${openSection === si ? LOVIFY.orange : LOVIFY.line}`,
+                        fontFamily: SANS, fontSize: 13.5, fontWeight: 800, color: LOVIFY.ink,
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)',
+                      }}
+                    >
+                      <span>{sec.title}</span>
+                      <span style={{ color: LOVIFY.orangeDeep }}>{openSection === si ? '▴' : '▾'}</span>
+                    </button>
                   )}
-                  {sec.ideas.map((idea) => {
+                  {(!sec.title || openSection === si) && sec.ideas.map((idea) => {
                     const sel = web && selectedIdeas.includes(idea);
                     return (
                       <button

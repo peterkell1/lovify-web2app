@@ -42,22 +42,21 @@ Given what hurts, their action plan, and their dream (their own words), create 4
 For each: a single fitting emoji; a short user-facing title (max 7 words, first person feel, e.g. "Date night, laughing like we used to"); and an image-generation prompt written as "as myself …" describing them in that scene — photorealistic, cinematic, warm golden light, emotionally specific.`;
 
     const systemPrompt = isVisions ? visionsSystemPrompt : isActions
-      ? `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just vented what hurts.
+      ? `You help people who are turning their lives around brainstorm what the best version of them would DO.
+Given what hurts in their life and the dream life they want (their own words), reply with exactly 3 brainstorm categories of daily actions that bridge FROM the pain TO that dream. Name each category after one of THEIR actual struggles or goals (2-4 punchy words — e.g. relationship pain → "Rebuild the spark"). 3 actions per category: first person, verb-first, max 7 words, concrete enough to start today, clearly connected to what they said — never generic self-help filler. Cover every distinct pain they mentioned.`
+      : `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just vented what hurts.
 
 Reply with two things:
 
-1. reflection — 1-2 short sentences that prove you truly HEARD them: mirror their specific situation back with warmth, in plain conversational language. No platitudes, no diagnoses, no claims about who they are that their words don't support. End by pointing forward (their comeback starts now).
+1. reflection — 1-2 short sentences that prove you truly HEARD them: mirror their specific situation back with warmth, in plain conversational language. No platitudes, no diagnoses, no claims their words don't support. End by pointing forward.
 
-2. categories — exactly 3 brainstorm categories of what THE BEST VERSION OF THEM would be doing every day to climb out of the specific things they named. Name each category after one of THEIR actual struggles (2-4 punchy words — e.g. relationship pain → "Rebuild the spark"). 3 actions per category: first person, verb-first, max 7 words, concrete enough to start today, and clearly connected to what they said — never generic self-help filler. Cover every distinct pain they mentioned.`
-      : `You help people who are turning their lives around imagine their best-case future.
-Given what is hurting in someone's life and the action plan they came up with (their own words), suggest vivid best-case-scenario MOMENTS of their future life — like scenes from a mind-movie, specific to them, not generic.
-Each moment: first person, present tense, max 8 words, emotionally vivid.`;
+2. ideas — 6 vivid best-case-scenario MOMENTS of their future life with those pains gone — like scenes from a mind-movie, specific to what THEY named, not generic. Each: first person, present tense, max 8 words, emotionally vivid.`;
 
     const userContent = isVisions
       ? `What hurts right now, in their own words:\n\n"${pain}"\n\nTheir plan to climb out:\n\n"${actions || ""}"\n\nTheir dream life, in their own words:\n\n"${dream || ""}"\n\nCreate the 4 vision options.`
       : isActions
-      ? `What hurts right now, in their own words:\n\n"${pain}"\n\nSuggest the action ideas.`
-      : `What hurts right now, in their own words:\n\n"${pain}"\n\nTheir plan to climb out:\n\n"${actions || ""}"\n\nSuggest the best-case-scenario moments.`;
+      ? `What hurts right now, in their own words:\n\n"${pain}"\n\nThe dream life they want, in their own words:\n\n"${dream || ""}"\n\nSuggest the action ideas that bridge from the pain to the dream.`
+      : `What hurts right now, in their own words:\n\n"${pain}"\n\nReply with the reflection and the best-case-scenario moments.`;
 
     const visionsTool = {
       name: "suggest_visions",
@@ -91,14 +90,10 @@ Each moment: first person, present tense, max 8 words, emotionally vivid.`;
       : isActions
       ? {
           name: "suggest_actions",
-          description: "Reflect what was heard, then suggest 3 categories of concrete comeback actions, 3 ideas each",
+          description: "Suggest 3 categories of concrete comeback actions bridging pain to dream, 3 ideas each",
           input_schema: {
             type: "object",
             properties: {
-              reflection: {
-                type: "string",
-                description: "1-2 warm conversational sentences mirroring their specific situation, ending pointed forward. No platitudes.",
-              },
               categories: {
                 type: "array",
                 items: {
@@ -119,16 +114,20 @@ Each moment: first person, present tense, max 8 words, emotionally vivid.`;
                 maxItems: 3,
               },
             },
-            required: ["reflection", "categories"],
+            required: ["categories"],
             additionalProperties: false,
           },
         }
       : {
           name: "suggest_dreams",
-          description: "Suggest 6 vivid best-case-scenario moments of their future life",
+          description: "Reflect what was heard, then suggest 6 vivid best-case-scenario moments of their future life",
           input_schema: {
             type: "object",
             properties: {
+              reflection: {
+                type: "string",
+                description: "1-2 warm conversational sentences mirroring their specific situation, ending pointed forward. No platitudes.",
+              },
               ideas: {
                 type: "array",
                 items: { type: "string", description: "First person, present tense, max 8 words" },
@@ -136,7 +135,7 @@ Each moment: first person, present tense, max 8 words, emotionally vivid.`;
                 maxItems: 6,
               },
             },
-            required: ["ideas"],
+            required: ["reflection", "ideas"],
             additionalProperties: false,
           },
         };

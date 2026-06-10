@@ -1147,16 +1147,16 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'user', reply: "I freaking hate who I've become" },
   { who: 'user', reply: "I don't even recognize myself anymore" },
   { who: 'bot', text: "I hear you. Somewhere along the way, you gave it all away — and lost yourself. Let's get her back." },
-  { who: 'bot', text: "Step 2 — the way out. What would you tell your best friend to do?" },
-  { who: 'user', reply: "Wake up early. Make time for herself." },
-  { who: 'user', reply: "Get her body moving again" },
-  { who: 'user', reply: "Plan the life she actually wants" },
-  { who: 'bot', text: "That's the comeback plan. Step 3 — if it all changed, what's the most amazing life you can imagine?" },
-  // Three universal dream beats the average person would actually say.
+  // Dream comes SECOND (best case first — lighter), then the steps.
+  { who: 'bot', text: "Step 2 — the dream. If all of it changed, what's the most amazing life you can imagine?" },
   { who: 'user', reply: "Waking up excited for my day" },
   { who: 'user', reply: "Proud of what I see in the mirror" },
   { who: 'user', reply: "My family saying I seem happier ✨" },
-  { who: 'bot', text: "Beautiful. Add your photo so you can see her — the you you're coming back to." },
+  { who: 'bot', text: "That's where we're going. Step 3 — the way out. What would you tell your best friend to do?" },
+  { who: 'user', reply: "Wake up early. Make time for herself." },
+  { who: 'user', reply: "Get her body moving again" },
+  { who: 'user', reply: "Plan the life she actually wants" },
+  { who: 'bot', text: "That's the comeback plan. Add your photo so you can see her — the you you're coming back to." },
   { who: 'user', reply: '📷 Add photo', photo: nursePhoto },
   { who: 'bot', text: "Perfect 🙌 What's the energy of your comeback song?" },
   { who: 'user', reply: "A comeback anthem 🔥" },
@@ -1903,8 +1903,8 @@ export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean
 // land as step 1 of a known process instead of an ambush.
 const COMEBACK_STEPS: { e: string; t: string }[] = [
   { e: '❌', t: "Vent out what's bugging you" },
-  { e: '🧭', t: 'Imagine the solutions' },
   { e: '✨', t: 'Describe the best version of you' },
+  { e: '🧭', t: 'Map the steps to get there' },
 ];
 export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: boolean }) {
   return (
