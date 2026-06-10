@@ -77,10 +77,15 @@ interface FlowState {
   genres: string[];     // favorite genres of sound (multi)
   source: string;       // attribution
   name: string;         // their first name, captured in the song chat
-  songAbout: string;    // what will your first song be about (single + free type)
-  detailText: string;   // smart detail — what they picture (free text)
-  scene: string;        // imagine living it — immersive scene (free text)
-  why: string;          // why it matters — emotional heart (free text)
+  // The three comeback answers (song chat) — the raw material for the song.
+  pain: string;         // Q1: the life they hate right now (vented, free text)
+  actions: string;      // Q2: the action steps they'd give someone they love
+  dream: string;        // Q3: the amazing life on the other side
+  // Legacy fields, kept populated via mapping for analytics/plumbing compat.
+  songAbout: string;    // 'My comeback'
+  detailText: string;   // = actions
+  scene: string;        // = dream
+  why: string;          // = pain
   soundStyle: string;   // what your song should sound like (single + free type)
   voice: string;        // who should sing your anthem (single)
   photos: (string | null)[]; // [you, +3 others] as data URLs — face feeds the vision generator
@@ -91,6 +96,7 @@ interface FlowState {
 const initialState: FlowState = {
   achieve: [], familiarity: '', referral: '',
   joy: '', goals: [], time: '', pressPlay: [], genres: [], source: '', name: '',
+  pain: '', actions: '', dream: '',
   songAbout: '', detailText: '', scene: '', why: '', soundStyle: '', voice: '',
   photos: [null, null, null, null],
   lyrics: '', lyricsTitle: '',
@@ -472,6 +478,9 @@ export function OnboardingComeback1Flow({ mode = 'app' }: { mode?: 'app' | 'web'
           // Persist everything the chat collected and start the song. The reveal
           // now renders inside the chat itself (no separate screen).
           set('name', r.name);
+          set('pain', r.pain);
+          set('actions', r.actions);
+          set('dream', r.dream);
           set('songAbout', r.songAbout);
           set('detailText', r.detail);
           set('scene', r.scene);

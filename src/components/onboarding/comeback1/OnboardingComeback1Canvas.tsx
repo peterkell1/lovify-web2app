@@ -111,8 +111,10 @@ function WChatReveal() {
   );
 }
 // The feature-demo chat self-runs; in the canvas it plays its scripted intro.
+// `web` so the canvas previews the web funnel's Nurse-comeback script (what
+// /comeback1 actually shows), not the native app's script.
 function WFeatureChat() {
-  return <V3_FeatureChat onNext={noop} onBack={noop} />;
+  return <V3_FeatureChat onNext={noop} onBack={noop} web />;
 }
 
 const SCREENS: { id: string; label: string; node: ReactNode }[] = [
