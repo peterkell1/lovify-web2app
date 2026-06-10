@@ -1138,17 +1138,24 @@ const DEMO_SCRIPT: DemoEvent[] = [
 // so the demo teaches the user exactly what's about to happen to them.
 const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you how this works." },
-  { who: 'bot', text: "What do you hate about your life right now? Be honest." },
-  { who: 'user', reply: "12-hour shifts, coming home to an empty apartment. I don't even recognize myself anymore." },
+  { who: 'bot', text: "Step 1 — vent it. What do you hate about your life right now?" },
+  // Rapid-fire venting: three short chips in a row, in the raw voice of someone
+  // who's actually pissed off — so the viewer imagines firing off their own.
+  { who: 'user', reply: "I work my ass off and I'm still drowning" },
+  { who: 'user', reply: "I freaking hate who I've become" },
+  { who: 'user', reply: "I don't even recognize myself anymore" },
   { who: 'bot', text: "I hear you. Somewhere along the way, you gave it all away — and lost yourself. Let's get her back." },
-  { who: 'bot', text: "If your best friend was stuck like this, what would you tell her to do?" },
-  { who: 'user', reply: "Wake up earlier and make time for herself. Plan the life she actually wants. Get her body back." },
-  { who: 'bot', text: "That's the comeback plan. Now — if all of it changed, what's the most amazing life you can imagine?" },
-  { who: 'user', reply: "Booking the trip. Wearing the dress. My daughter telling me I'm glowing ✨" },
+  { who: 'bot', text: "Step 2 — the way out. What would you tell your best friend to do?" },
+  { who: 'user', reply: "Wake up early. Make time for herself." },
+  { who: 'user', reply: "Get her body moving again" },
+  { who: 'user', reply: "Plan the life she actually wants" },
+  { who: 'bot', text: "That's the comeback plan. Step 3 — if it all changed, what's the most amazing life you can imagine?" },
+  { who: 'user', reply: "Book the trip. Wear the dress." },
+  { who: 'user', reply: "My daughter saying — mama, you're glowing ✨" },
   { who: 'bot', text: "Beautiful. Add your photo so you can see her — the you you're coming back to." },
   { who: 'user', reply: '📷 Add photo', photo: demoPhoto },
   { who: 'bot', text: "Perfect 🙌 What's the energy of your comeback song?" },
-  { who: 'user', reply: "Something hopeful that builds — a comeback anthem." },
+  { who: 'user', reply: "A comeback anthem 🔥" },
   { who: 'bot', text: "Here's your comeback song — from the life you hate to the life you love:" },
   // Near-verbatim lines from the winning "Nurse" formula.
   { who: 'bot', title: 'Your lyrics', lyrics: [
@@ -1846,7 +1853,77 @@ export function V3_WhyBuilt({ onNext, onBack, web }: NavProps & { web?: boolean 
       visual={<ImgHero src={heroLives} size={320} web={web} />}
       web={web}
       body={<>Positive lyrics on repeat plant empowering beliefs that move you toward your dream life so you become the person living it.</>}
-      cta="Show me the demo"
+      cta="Continue"
+      onNext={onNext}
+      onBack={onBack}
+    />
+  );
+}
+
+// ─── 15 · Song ideas — you can turn anything into a song ──────
+// Breadth first: show the range of songs members make, so the comeback song
+// on the next screen reads as the smart STARTING point, not the only option.
+const SONG_IDEAS: { e: string; t: string }[] = [
+  { e: '👑', t: 'Confidence anthem' },
+  { e: '🧲', t: 'Manifest your goal' },
+  { e: '❤️', t: 'For someone you love' },
+  { e: '🧘', t: 'Calm your mind' },
+  { e: '🏋️', t: 'Gym hype song' },
+  { e: '💰', t: 'Money & freedom' },
+  { e: '🌅', t: 'Morning ritual' },
+  { e: '😴', t: 'Sleep & let go' },
+];
+export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean }) {
+  return (
+    <SocReveal
+      title={<>You can turn <LovAccent>anything</LovAccent> into a song.</>}
+      visual={
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 340 }}>
+          {SONG_IDEAS.map((s) => (
+            <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 12px', borderRadius: 14, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${LOVIFY.line}`, boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)' }}>
+              <span style={{ fontSize: 18 }}>{s.e}</span>
+              <span style={{ fontFamily: SANS, fontSize: 13.5, fontWeight: 700, color: LOVIFY.ink }}>{s.t}</span>
+            </div>
+          ))}
+        </div>
+      }
+      web={web}
+      body={<>Members program every part of their life with personalized songs.</>}
+      cta="Continue"
+      onNext={onNext}
+      onBack={onBack}
+    />
+  );
+}
+
+// ─── 16 · The Comeback Song — the method, taught before the demo ──
+// The heads-up that makes the demo's "what do you hate about your life?"
+// land as step 1 of a known process instead of an ambush.
+const COMEBACK_STEPS: { e: string; t: string; d: string }[] = [
+  { e: '❌', t: 'Vent it', d: "Get clear on what you don't want anymore." },
+  { e: '🧭', t: 'The way out', d: "The steps you'd tell your best friend to take." },
+  { e: '✨', t: "The life you're walking into", d: "Picture it like it's already yours." },
+];
+export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: boolean }) {
+  return (
+    <SocReveal
+      title={<>Start with your <LovAccent>Comeback Song</LovAccent>.</>}
+      visual={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 340 }}>
+          {COMEBACK_STEPS.map((s, i) => (
+            <div key={s.t} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${LOVIFY.line}`, boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)' }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{s.e}</span>
+              <span style={{ fontFamily: SANS }}>
+                <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: LOVIFY.ink }}>{i + 1}. {s.t}</span>
+                <span style={{ display: 'block', marginTop: 2, fontSize: 13, color: LOVIFY.sub, lineHeight: 1.4 }}>{s.d}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      }
+      web={web}
+      body={<>It&apos;s the most effective first song — we turn all three into your anthem, and you press play every morning.</>}
+      cta="Show me how it works"
       onNext={onNext}
       onBack={onBack}
     />

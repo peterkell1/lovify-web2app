@@ -383,8 +383,8 @@ export function V3_Chat({
       data.current.name = fn;
       setPhase('pain');
       botSay([
-        `Okay ${fn}. Let's start where you actually are — not where you're supposed to be.`,
-        `What do you hate about your life right now? Be honest — vent it all.`,
+        `Okay ${fn}. Here's how your comeback song works: first what you don't want, then your way out, then the life you're walking into.`,
+        `Step 1 — vent it all. What do you hate about your life right now?`,
       ], 'text');
     } else if (phase === 'pain') {
       data.current.pain = value;
@@ -392,7 +392,7 @@ export function V3_Chat({
       setPhase('actions');
       botSay([
         `I hear you, ${name}. And here's the truth — that's not who you are. Somewhere along the way, you lost the real you. Let's go get them back.`,
-        `If someone you love was stuck exactly where you are — what would you tell them to DO to climb out? Be specific.`,
+        `Step 2 — the way out. If someone you love was stuck exactly where you are, what would you tell them to DO to climb out?`,
       ], 'text');
     } else if (phase === 'actions') {
       data.current.actions = value;
@@ -400,7 +400,7 @@ export function V3_Chat({
       setPhase('dream');
       botSay([
         `That's the comeback plan — you already know the way back. 💪 Your song is going to plant it in your mind, every time you press play.`,
-        `Last one. Imagine every bit of that pain is gone. What's the most amazing life you can picture, ${name}? What does it feel like — and why does it matter so much?`,
+        `Step 3 — the life you're walking into. Imagine every bit of that pain is gone. What's the most amazing life you can picture, ${name}?`,
       ], 'text');
     } else if (phase === 'dream') {
       data.current.dream = value;

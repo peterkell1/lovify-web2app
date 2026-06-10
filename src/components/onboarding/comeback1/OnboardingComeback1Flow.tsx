@@ -12,7 +12,7 @@ import {
   V3_01_Splash,
   V3_DrugHook, V3_DrugReveal, V3_Discovery, V3_Science, V3_Achieve, V3_LovifyHelps,
   V3_FeatureChat,
-  V3_Familiarity, V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_Tracking, V3_Review, V3_Referral,
+  V3_Familiarity, V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_SongIdeas, V3_ComebackMethod, V3_Tracking, V3_Review, V3_Referral,
   V3_04_Story, V3_05_Promise,
   V3_10_Deepen, V3_TimeReassurance,
   V3_11_LeanedOn, V3_Genres, V3_14_Source, V3_16_Nudge,
@@ -49,7 +49,8 @@ import { trackPixel } from '@/lib/metaPixel';
 const APP_STEP_IDS = [
   'home', 'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
   'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
-  'proof_music_negative', 'proof_more_depressed', 'the_turn', 'demo_chat',
+  'proof_music_negative', 'proof_more_depressed', 'the_turn',
+  'song_ideas', 'comeback_method', 'demo_chat',
   'att_tracking', 'review_prompt', 'time', 'time_reassurance', 'when_you_listen',
   'genres', 'attribution', 'daily_nudge', 'make_first_song', 'song_chat',
   'paywall_benefits', 'paywall_7days_free', 'paywall_reminder', 'paywall_price',
@@ -441,6 +442,11 @@ export function OnboardingComeback1Flow({ mode = 'app' }: { mode?: 'app' | 'web'
       case 'proof_music_negative': return <V3_Proof1 onNext={next} onBack={back} web={mode === 'web'} />;
       case 'proof_more_depressed': return <V3_Proof2 onNext={next} onBack={back} web={mode === 'web'} />;
       case 'the_turn': return <V3_WhyBuilt onNext={next} onBack={back} web={mode === 'web'} />;
+      // Breadth ("you can make a song about anything"), then the comeback
+      // method — the heads-up that makes the demo's venting question land as
+      // step 1 of a known process instead of an ambush.
+      case 'song_ideas': return <V3_SongIdeas onNext={next} onBack={back} web={mode === 'web'} />;
+      case 'comeback_method': return <V3_ComebackMethod onNext={next} onBack={back} web={mode === 'web'} />;
       // Roleplay demo CHAT (the turn promised "show me the demo").
       case 'demo_chat': return <V3_FeatureChat onNext={next} onBack={back} web={mode === 'web'} playing={playing} onToggleSound={() => setSound((s) => !s)} />;
       // App-only (omitted on web): ATT pre-prompt right after the demo, then the

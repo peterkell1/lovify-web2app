@@ -11,7 +11,7 @@ import {
   V3_01_Splash,
   V3_DrugHook, V3_DrugReveal, V3_Discovery, V3_Science, V3_Achieve, V3_LovifyHelps,
   V3_FeatureChat,
-  V3_Familiarity, V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_Referral,
+  V3_Familiarity, V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_SongIdeas, V3_ComebackMethod, V3_Referral,
   V3_04_Story, V3_05_Promise,
   V3_10_Deepen, V3_TimeReassurance,
   V3_11_LeanedOn, V3_Genres,
@@ -135,27 +135,30 @@ const SCREENS: { id: string; label: string; node: ReactNode }[] = [
   { id: '12', label: '12 · Proof: 20k songs got more negative', node: <V3_Proof1 onNext={noop} onBack={noop} /> },
   { id: '13', label: '13 · Proof: saddest generation yet', node: <V3_Proof2 onNext={noop} onBack={noop} /> },
   { id: '14', label: '14 · The loop runs both ways (turn)', node: <V3_WhyBuilt onNext={noop} onBack={noop} /> },
+  // ── Breadth → the comeback method (the heads-up before the demo) ──
+  { id: '15', label: '15 · You can turn anything into a song', node: <V3_SongIdeas onNext={noop} onBack={noop} /> },
+  { id: '16', label: '16 · Start with your Comeback Song (method)', node: <V3_ComebackMethod onNext={noop} onBack={noop} /> },
   // ── Roleplay demo chat ──
-  { id: '15', label: '15 · How it works (roleplay demo)', node: <WFeatureChat /> },
+  { id: '17', label: '17 · How it works (roleplay demo)', node: <WFeatureChat /> },
   // ── Quiz (trimmed) ──
-  { id: '16', label: '16 · Time', node: <WDeepen /> },
-  { id: '17', label: '17 · Music reassurance', node: <V3_TimeReassurance onNext={noop} onBack={noop} /> },
-  { id: '18', label: '18 · When you listen to music', node: <WLeaned /> },
-  { id: '19', label: '19 · Favorite genres', node: <WGenres /> },
-  { id: '20', label: '20 · Make your first song', node: <V3_MakeSong onNext={noop} onBack={noop} /> },
+  { id: '18', label: '18 · Time', node: <WDeepen /> },
+  { id: '19', label: '19 · Music reassurance', node: <V3_TimeReassurance onNext={noop} onBack={noop} /> },
+  { id: '20', label: '20 · When you listen to music', node: <WLeaned /> },
+  { id: '21', label: '21 · Favorite genres', node: <WGenres /> },
+  { id: '22', label: '22 · Make your first song', node: <V3_MakeSong onNext={noop} onBack={noop} /> },
   // ── Song chat (intro) + the inline reveal it now ends with ──
-  { id: '21', label: '21 · Song chat (personalized)', node: <WChat /> },
-  { id: '22', label: '22 · Song chat → your song (reveal)', node: <WChatReveal /> },
+  { id: '23', label: '23 · Song chat (personalized)', node: <WChat /> },
+  { id: '24', label: '24 · Song chat → your song (reveal)', node: <WChatReveal /> },
   // ── Paywall ──
-  { id: '23', label: '23 · Paywall: get full access', node: <V3_22_Trial onNext={noop} onBack={noop} /> },
-  { id: '24', label: '24 · Paywall: $1 first week', node: <V3_TrialOffer onNext={noop} onBack={noop} /> },
-  { id: '25', label: '25 · Paywall: we’ll remind you', node: <V3_TrialReminder onNext={noop} onBack={noop} /> },
-  { id: '26', label: '26 · Paywall: $1 first week (price) · tap to test 💳', node: <WTrialPrice /> },
-  { id: '27', label: '27 · Paywall: choose your plan · tap to test 💳', node: <WPaywallPlans /> },
+  { id: '25', label: '25 · Paywall: get full access', node: <V3_22_Trial onNext={noop} onBack={noop} /> },
+  { id: '26', label: '26 · Paywall: $1 first week', node: <V3_TrialOffer onNext={noop} onBack={noop} /> },
+  { id: '27', label: '27 · Paywall: we’ll remind you', node: <V3_TrialReminder onNext={noop} onBack={noop} /> },
+  { id: '28', label: '28 · Paywall: $1 first week (price) · tap to test 💳', node: <WTrialPrice /> },
+  { id: '29', label: '29 · Paywall: choose your plan · tap to test 💳', node: <WPaywallPlans /> },
   // ── Required account creation (song gets saved), then into the app ──
-  { id: '28', label: '28 · Create a Lovify account', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
+  { id: '30', label: '30 · Create a Lovify account', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
   // ── Web funnel only: after account → download page (/start/success) ──
-  { id: '29', label: '29 · Download the app (web funnel)', node: <StartSuccessView /> },
+  { id: '31', label: '31 · Download the app (web funnel)', node: <StartSuccessView /> },
 ];
 
 const FRAME_W = 340;
