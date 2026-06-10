@@ -1897,37 +1897,30 @@ export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean
 // ─── 16 · The Comeback Song — the method, taught before the demo ──
 // The heads-up that makes the demo's "what do you hate about your life?"
 // land as step 1 of a known process instead of an ambush.
-const COMEBACK_STEPS: { e: string; t: string; d: string }[] = [
-  { e: '❌', t: 'Vent it', d: 'The pain and problems in your life right now.' },
-  { e: '🧭', t: 'Imagine the solutions', d: 'What would fix it?' },
-  { e: '✨', t: 'Picture the version of you who already has it', d: "Like it's already real." },
+const COMEBACK_STEPS: { e: string; t: string }[] = [
+  { e: '❌', t: "Vent out what's bugging you" },
+  { e: '🧭', t: 'Imagine the solutions' },
+  { e: '✨', t: 'Describe the best version of you' },
 ];
 export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: boolean }) {
   return (
     <SocReveal
-      title={<>One of the most powerful is the <LovAccent>Comeback Song</LovAccent>.</>}
+      title={<>Let&apos;s start with the <LovAccent>Comeback Song</LovAccent>.</>}
       visual={
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 340 }}>
-          {/* The definition — why it's THE first song for our customer. */}
-          <p style={{ margin: '0 0 2px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.5, fontWeight: 600, color: LOVIFY.inkSoft, textAlign: 'center' }}>
-            The anthem of you coming back to who you were always meant to be.
-          </p>
-          <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.orangeDeep, padding: '2px 4px 0' }}>
+          <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.orangeDeep, padding: '0 4px' }}>
             How to make it
           </div>
           {COMEBACK_STEPS.map((s, i) => (
-            <div key={s.t} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${LOVIFY.line}`, boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)' }}>
+            <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '15px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${LOVIFY.line}`, boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)' }}>
               <span style={{ fontSize: 20, flexShrink: 0 }}>{s.e}</span>
-              <span style={{ fontFamily: SANS }}>
-                <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: LOVIFY.ink }}>{i + 1}. {s.t}</span>
-                <span style={{ display: 'block', marginTop: 2, fontSize: 13, color: LOVIFY.sub, lineHeight: 1.4 }}>{s.d}</span>
-              </span>
+              <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 800, color: LOVIFY.ink }}>{i + 1}. {s.t}</span>
             </div>
           ))}
         </div>
       }
       web={web}
-      body={<>We turn it into your anthem for bringing your life back together — and you press play every morning.</>}
+      body={<>We turn it into your anthem. Press play every morning.</>}
       cta="Show me how it works"
       onNext={onNext}
       onBack={onBack}
