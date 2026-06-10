@@ -121,14 +121,15 @@ const IDEA_LOADING_LINES = [
   'Reading what you wrote…',
   'Picturing your best-case moments…',
 ];
+// The wait IS the product moment: these lines tell the user what the song
+// really is — beliefs, identity and imagination work, not just lyrics.
 const WRITING_LINES = [
-  'Reading your story…',
-  'Finding your comeback arc…',
-  'Creating your affirmations…',
-  'Installing the new beliefs…',
-  'Writing your action verses…',
-  'Polishing your chorus…',
-  'Making your comeback song…',
+  'Studying who you want to become…',
+  'Finding the beliefs that set you free…',
+  'Writing your new identity statements…',
+  'Making your dream feel real — now…',
+  'Choosing words that rewire your mind…',
+  'Turning it all into your anthem…',
 ];
 
 function LoaderLine({ lines, centered }: { lines: string[]; centered?: boolean }) {
