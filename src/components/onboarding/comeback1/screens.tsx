@@ -1148,7 +1148,7 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'user', reply: "I don't even recognize myself anymore" },
   { who: 'bot', text: "I hear you. Somewhere along the way, you gave it all away — and lost yourself. Let's get her back." },
   // Dream comes SECOND (best case first — lighter), then the steps.
-  { who: 'bot', text: "Step 2 — the dream. If all of it changed, what's the most amazing life you can imagine?" },
+  { who: 'bot', text: "Step 2 — the magic wand 🪄 If you could change anything about you or your life, what would you wish for?" },
   { who: 'user', reply: "Waking up excited for my day" },
   { who: 'user', reply: "Proud of what I see in the mirror" },
   { who: 'user', reply: "My family saying I seem happier ✨" },

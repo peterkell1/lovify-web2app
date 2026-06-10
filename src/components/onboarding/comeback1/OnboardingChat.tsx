@@ -513,7 +513,11 @@ export function V3_Chat({
   // Categorized lists (actions) render as a compact accordion: tap a category
   // to open its ideas — far less overwhelming than 9 buttons at once.
   const [openSection, setOpenSection] = useState<number | null>(null);
-  useEffect(() => { setOpenSection(null); }, [phase]);
+  // The dream step keeps its ideas BEHIND a "✨ Help me imagine" button — the
+  // wish moment belongs to the user's own words first; the AI list is a hand
+  // for whoever needs one, not the default.
+  const [showDreamIdeas, setShowDreamIdeas] = useState(false);
+  useEffect(() => { setOpenSection(null); setShowDreamIdeas(false); }, [phase]);
 
   // ── Text answers (name / pain / actions / dream) ──
   // Accepts an explicit value so tapped "Help me…" ideas can move forward too.
@@ -556,8 +560,7 @@ export function V3_Chat({
         setMsgs((m) => m.filter((x) => x.id !== tid));
         botSay([
           (r && r.reflection) || `Thank you for being real with me, ${name}. Getting it all out is the first step.`,
-          `Now flip it: imagine every bit of that is behind you. What's the most amazing life you can picture, ${name}?`,
-          `Select a few below, or type your own 👇`,
+          `Now, imagine you had a magic wand 🪄 that could change anything about you or your life — what are the first 4 things you'd wish for?`,
         ], 'text');
       });
     } else if (phase === 'dream') {
@@ -795,6 +798,7 @@ export function V3_Chat({
     setVisionIdeas(null);
     setIdeasTimedOut(false);
     setOpenSection(null);
+    setShowDreamIdeas(false);
     actionReqRef.current = false;
     dreamReqRef.current = false;
     visionReqRef.current = false;
@@ -885,7 +889,24 @@ export function V3_Chat({
             AI-personalized to what they vented, grouped in tappable
             multi-select categories. Tapping a few AND typing combine into one
             answer when they hit ↑. */}
-        {mode === 'text' && (phase === 'actions' || phase === 'dream') && (
+        {/* Dream step: the ideas stay collapsed behind "Help me imagine". */}
+        {mode === 'text' && phase === 'dream' && !showDreamIdeas && (
+          <motion.button
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            onClick={() => setShowDreamIdeas(true)}
+            style={{
+              alignSelf: 'flex-start', cursor: 'pointer', marginTop: 2,
+              padding: '8px 14px', borderRadius: 18,
+              background: 'rgba(255, 251, 244, 0.7)', border: `1px solid ${LOVIFY.line}`,
+              fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            ✨ Help me imagine
+          </motion.button>
+        )}
+
+        {mode === 'text' && (phase === 'actions' || (phase === 'dream' && showDreamIdeas)) && (
           ideasPending ? (
             <div style={{ alignSelf: 'flex-start' }}>
               <LoaderLine lines={IDEA_LOADING_LINES} />
