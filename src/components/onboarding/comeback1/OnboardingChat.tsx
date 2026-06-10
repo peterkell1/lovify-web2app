@@ -26,6 +26,7 @@ import {
   suggestSoundStyles, generateLyrics, type SoundVibe,
 } from '@/components/onboarding/v3/generation';
 import type { GeneratedSong } from '@/components/onboarding/v3/generation';
+import { publicEnv } from '@/lib/env';
 
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
 
@@ -74,46 +75,38 @@ export interface ChatResult {
 // between these carry the formula's ROOT CAUSE and TURNING POINT beats, so
 // the conversation itself walks the user through the arc of their song.
 
-// ── "Help me…" idea banks (one per question) ──────────────────────
-// For users who are low, stuck, or just can't find the words. On web they're
-// multi-select chips (tap a few → ↑ to continue); in-app a tap sends one.
-// Q1 — venting starters: name the pain when the words won't come.
-const PAIN_IDEAS = [
-  'Exhausted all the time',
-  'Lonely even around people',
-  'Stuck in a job that drains me',
-  "Don't recognize myself anymore",
-  'Just going through the motions',
-  'Numb — nothing excites me',
+// ── "Help me…" ideas (Q2/Q3 only — Q1 venting gets NO crutch on purpose:
+// people are good at naming their pain; we want their own words). The live
+// ideas are AI-generated from what the user just vented (see the suggest
+// helpers below); these banks are the offline/failure fallbacks.
+export interface IdeaSection { title?: string; ideas: string[] }
+// Q2 fallback — legitimate, doable actions, grouped so the user can scan
+// categories and tap the ones that fit.
+const FALLBACK_ACTION_SECTIONS: IdeaSection[] = [
+  { title: 'Body & energy', ideas: ['Get back in the gym', 'Walk every morning', 'Eat like I respect myself'] },
+  { title: 'Mind & peace', ideas: ['Wake up before my alarm, make time for me', 'Journal what I want, every morning', 'Cut the doom-scrolling at night'] },
+  { title: 'People & life', ideas: ['Say yes — to the date, the invite, the chance', 'Reconnect with a friend every week', 'Plan the life I want on Sunday nights'] },
 ];
-// Q2 — concrete action steps (modeled on the winning formulas): vivid little
-// scenes the lyrics can show them DOING.
-const ACTION_IDEAS = [
-  'Wake up before my alarm, make time for me',
-  'Coffee on the porch, planning the life I want',
-  'Get back in the gym',
-  'Eat like I respect myself',
-  'Book the trip I keep putting off',
-  'Say yes — to the date, the invite, the chance',
-];
-// Q3 — epic mind-movie moments: the amazing-life beats of the comeback.
-const DREAM_IDEAS = [
-  'Someone tells me "you\'re glowing"',
-  'I wear the thing I never dared to wear',
-  'My kid says "you seem happy" — and I am',
-  'I wake up excited, before the alarm',
-  "I'm proud when I catch my reflection",
-  'Not just surviving — living a life I choose',
+// Q3 fallback — best-case-scenario moments.
+const FALLBACK_DREAM_IDEAS: IdeaSection[] = [
+  { ideas: [
+    'I wake up excited, before the alarm',
+    "I'm proud of what I see in the mirror",
+    'My family says I seem happier — and I am',
+    'Someone tells me "you\'re glowing"',
+    'I love the work I do all day',
+    'Not just surviving — living a life I choose',
+  ] },
 ];
 
-// ── Vision-scene ideas: concrete IMAGE looks the user can pick after adding
-// their photo. Always the DREAM side of the comeback — the picture shows where
-// they're going, never the pain they're leaving.
+// ── Vision options: SPECIFIC future scenes the user can see themselves in
+// ("What vision of the future do you want to see yourself in?"). Always the
+// dream side of the comeback — concrete moments, not abstract moods.
 const COMEBACK_VISION_IDEAS: { e: string; t: string; prompt: string }[] = [
-  { e: '🔥', t: 'The comeback version of me', prompt: 'as the comeback version of myself — transformed, strong and radiant, stepping out of a hard chapter into golden light, cinematic and triumphant' },
-  { e: '🌅', t: 'Me, glowing & thriving', prompt: 'as a glowing, thriving version of myself, healthy and alive, warm golden-hour light, serene and quietly powerful' },
-  { e: '🏆', t: 'Me, proud of how far I came', prompt: 'as a proud, accomplished version of myself who came all the way back, standing tall with quiet pride, cinematic golden light' },
-  { e: '🎬', t: 'Me, living my best day', prompt: 'as myself living the best day of my new life — joyful, free and fully present, radiant cinematic scene' },
+  { e: '🌅', t: 'Coffee on my porch at sunrise, at peace', prompt: 'as the comeback version of myself at golden-hour sunrise, coffee in hand on a beautiful porch, calm, glowing and at peace, planning the life I want, cinematic warm light' },
+  { e: '💪', t: 'Fit & glowing after a morning workout', prompt: 'as a fit, glowing version of myself right after a morning workout, strong and energized, sunrise light, cinematic' },
+  { e: '🎉', t: 'Celebrating a big win with people I love', prompt: 'as myself celebrating a big win surrounded by the people I love, joyful golden light, radiant and alive, cinematic' },
+  { e: '🏔️', t: 'On a mountaintop — strong & free', prompt: 'as myself standing on a mountaintop at sunrise, arms open, strong and free, the hard chapter behind me, cinematic and triumphant' },
 ];
 
 function firstName(raw: string): string {
@@ -182,6 +175,48 @@ function buildComebackLyricsPrompt(a: { name: string; pain: string; actions: str
   ].join('\n');
 }
 
+// ── AI idea suggestions (Q2 actions / Q3 dreams) ──────────────────
+// Personalized to what the user just vented, via the `suggest-comeback-ideas`
+// edge function (source ships in this repo: docs/edge-functions/, deploy with
+// `supabase functions deploy suggest-comeback-ideas --project-ref <ref>`).
+// Pre-warmed the moment the previous answer lands so ideas are usually ready
+// by the time the user taps for help. Until the function is deployed — or on
+// any failure — the static banks above fill in silently.
+async function suggestIdeas(body: { kind: 'actions' | 'dreams'; pain: string; actions?: string }): Promise<unknown> {
+  const res = await fetch(`${publicEnv.supabaseUrl}/functions/v1/suggest-comeback-ideas`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${publicEnv.supabaseAnonKey}`,
+      apikey: publicEnv.supabaseAnonKey,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`suggest-comeback-ideas ${res.status}`);
+  return res.json();
+}
+
+const clip = (s: unknown) => String(s ?? '').trim().slice(0, 60);
+
+/** Concrete, doable action ideas for THEIR situation, grouped in categories. */
+async function suggestActionSections(pain: string): Promise<IdeaSection[]> {
+  const j = (await suggestIdeas({ kind: 'actions', pain })) as { categories?: { title?: string; ideas?: unknown[] }[] };
+  const sections = (j.categories || [])
+    .slice(0, 3)
+    .map((c) => ({ title: clip(c.title), ideas: (c.ideas || []).map(clip).filter(Boolean).slice(0, 4) }))
+    .filter((c) => c.ideas.length);
+  if (!sections.length) throw new Error('empty categories');
+  return sections;
+}
+
+/** Vivid best-case-scenario moments, specific to their pain + their plan. */
+async function suggestDreamSections(pain: string, actions: string): Promise<IdeaSection[]> {
+  const j = (await suggestIdeas({ kind: 'dreams', pain, actions })) as { ideas?: unknown[] };
+  const ideas = (j.ideas || []).map(clip).filter(Boolean).slice(0, 7);
+  if (!ideas.length) throw new Error('empty ideas');
+  return [{ ideas }];
+}
+
 // Everything needed to restore the chat exactly where the user left off when
 // they navigate back into it from the reveal. Owned by the parent flow so it
 // survives this component unmounting.
@@ -237,10 +272,17 @@ export function V3_Chat({
   const [mode, setMode] = useState<InputMode>(() => persisted?.mode ?? 'busy');
   const [draft, setDraft] = useState('');
   const [showIdeas, setShowIdeas] = useState(false);
-  // Web "Help me imagine" is multi-select: tap several short ideas, then Continue.
+  // Web "Help me…" is multi-select: tap several short ideas, then Continue.
   const [selectedIdeas, setSelectedIdeas] = useState<string[]>([]);
   const toggleIdea = (idea: string) =>
     setSelectedIdeas((s) => (s.includes(idea) ? s.filter((x) => x !== idea) : [...s, idea]));
+  // AI-personalized idea sections (Q2 actions / Q3 dreams) — pre-warmed the
+  // moment the previous answer lands; the static banks fill in until/if the
+  // AI replies. Guarded so each is requested once per run.
+  const [actionIdeas, setActionIdeas] = useState<IdeaSection[] | null>(null);
+  const [dreamIdeas, setDreamIdeas] = useState<IdeaSection[] | null>(null);
+  const actionReqRef = useRef(false);
+  const dreamReqRef = useRef(false);
   const [vibes, setVibes] = useState<SoundVibe[]>(() => persisted?.vibes ?? []);
   // True once lyrics are confirmed — the reveal (vision + songs) renders inline
   // at the bottom of the chat. Restored straight to revealed on back-nav.
@@ -352,19 +394,15 @@ export function V3_Chat({
 
   const name = data.current.name;
 
-  // Ideas to show under the "Help me…" affordance for the current question.
-  const currentIdeas = (): string[] => {
-    if (phase === 'pain') return PAIN_IDEAS;
-    if (phase === 'actions') return ACTION_IDEAS;
-    if (phase === 'dream') return DREAM_IDEAS;
+  // Idea sections for the current question — the AI-personalized set once it
+  // arrives, the static bank otherwise. NO ideas on the pain question: people
+  // are good at naming their pain; we want their own words, not a crutch.
+  const currentIdeaSections = (): IdeaSection[] => {
+    if (phase === 'actions') return actionIdeas ?? FALLBACK_ACTION_SECTIONS;
+    if (phase === 'dream') return dreamIdeas ?? FALLBACK_DREAM_IDEAS;
     return [];
   };
-  // The affordance label matches the question's job: venting needs words, the
-  // plan needs ideas, the amazing life needs imagination.
-  const ideasLabel =
-    phase === 'pain' ? '💭 Help me put it into words'
-    : phase === 'actions' ? '✨ Help me with ideas'
-    : '✨ Help me imagine';
+  const ideasLabel = phase === 'actions' ? '✨ Need a few ideas?' : '✨ Help me imagine it';
 
   // ── Text answers (name / pain / actions / dream) ──
   // Accepts an explicit value so tapped "Help me…" ideas can move forward too.
@@ -382,13 +420,19 @@ export function V3_Chat({
       const fn = firstName(value);
       data.current.name = fn;
       setPhase('pain');
+      // The method was already taught on the "comeback song" screen — dive in.
       botSay([
-        `Okay ${fn}. Here's how your comeback song works: first what you don't want, then your way out, then the life you're walking into.`,
-        `Step 1 — vent it all. What's paining you the most in life right now?`,
+        `Nice to meet you, ${fn}.`,
+        `Let's start by getting it out — what's paining you the most in your life right now? Reply in specific detail so we know exactly where we're starting from.`,
       ], 'text');
     } else if (phase === 'pain') {
       data.current.pain = value;
       data.current.why = value; // legacy mapping for parent plumbing/analytics
+      // Pre-warm the personalized action ideas while they read the ack.
+      if (!actionReqRef.current) {
+        actionReqRef.current = true;
+        suggestActionSections(value).then(setActionIdeas).catch(() => { /* fallback bank covers it */ });
+      }
       setPhase('actions');
       botSay([
         `I hear you, ${name}. And here's the truth — that's not who you are. Somewhere along the way, you lost the real you. Let's go get them back.`,
@@ -397,6 +441,11 @@ export function V3_Chat({
     } else if (phase === 'actions') {
       data.current.actions = value;
       data.current.detail = value; // legacy mapping
+      // Pre-warm the personalized dream ideas from their pain + plan.
+      if (!dreamReqRef.current) {
+        dreamReqRef.current = true;
+        suggestDreamSections(data.current.pain, value).then(setDreamIdeas).catch(() => { /* fallback bank covers it */ });
+      }
       setPhase('dream');
       botSay([
         `That's the comeback plan — you already know the way back. 💪 Your song is going to plant it in your mind, every time you press play.`,
@@ -426,7 +475,7 @@ export function V3_Chat({
     setPhase('visionScene');
     botSay([
       faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's who we're fighting for. ✨`,
-      `Now let's SEE the comeback version of you, ${name}. Which one should we bring to life? (or describe your own below)`,
+      `What vision of the future do you want to see yourself in, ${name}?`,
     ], 'visionScene');
   };
   const skipPhoto = () => {
@@ -434,7 +483,7 @@ export function V3_Chat({
     data.current.faces = [];
     data.current.face = null;
     setPhase('visionScene');
-    botSay([`No worries — we can add it anytime.`, `Which version of you should we picture, ${name}? (or describe your own)`], 'visionScene');
+    botSay([`No worries — we can add it anytime.`, `What vision of the future do you want to see yourself in, ${name}?`], 'visionScene');
   };
 
   // ── Vision-scene (image look) chosen → pre-warm the image, move to sound ──
@@ -687,10 +736,12 @@ export function V3_Chat({
           <Bubble key={m.id} msg={m} />
         ))}
 
-        {/* "Help me imagine" lives right under the AI's question — a gentle hand
-            for anyone who's stuck or low. Left-aligned like a bot affordance so
-            it reads as part of the assistant's message. Hidden on the name step. */}
-        {mode === 'text' && phase !== 'name' && (
+        {/* The "Help me…" affordance — Q2/Q3 only (the pain question gets no
+            crutch: we want their own words). Deliberately QUIET so the user's
+            focus stays on typing; it's a light hand for whoever needs one.
+            Ideas are AI-personalized to what they vented (fallback bank until
+            then), grouped in tappable multi-select categories. */}
+        {mode === 'text' && (phase === 'actions' || phase === 'dream') && (
           showIdeas ? (
             <motion.div
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -702,27 +753,36 @@ export function V3_Chat({
                 </span>
                 <button onClick={() => { setShowIdeas(false); setSelectedIdeas([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.sub }}>Close</button>
               </div>
-              {currentIdeas().map((idea) => {
-                const sel = web && selectedIdeas.includes(idea);
-                return (
-                  <button
-                    key={idea}
-                    onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
-                    style={{
-                      textAlign: 'left', cursor: 'pointer', width: '100%',
-                      padding: '12px 15px', borderRadius: 16,
-                      background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
-                      border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
-                      fontFamily: SANS, fontSize: 14, lineHeight: 1.4, color: LOVIFY.ink, fontWeight: sel ? 700 : 400,
-                      display: 'flex', gap: 9, alignItems: 'center',
-                      boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)',
-                    }}
-                  >
-                    <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
-                    <span>{idea}</span>
-                  </button>
-                );
-              })}
+              {currentIdeaSections().map((sec, si) => (
+                <div key={sec.title || si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {sec.title && (
+                    <div style={{ fontFamily: SANS, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.subSoft, padding: '4px 2px 0' }}>
+                      {sec.title}
+                    </div>
+                  )}
+                  {sec.ideas.map((idea) => {
+                    const sel = web && selectedIdeas.includes(idea);
+                    return (
+                      <button
+                        key={idea}
+                        onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
+                        style={{
+                          textAlign: 'left', cursor: 'pointer', width: '100%',
+                          padding: '12px 15px', borderRadius: 16,
+                          background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
+                          border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
+                          fontFamily: SANS, fontSize: 14, lineHeight: 1.4, color: LOVIFY.ink, fontWeight: sel ? 700 : 400,
+                          display: 'flex', gap: 9, alignItems: 'center',
+                          boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)',
+                        }}
+                      >
+                        <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
+                        <span>{idea}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
               {web && selectedIdeas.length > 0 && (
                 <div style={{ alignSelf: 'flex-start', padding: '2px 4px 0', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
                   {selectedIdeas.length} selected — tap ↑ to continue
@@ -735,11 +795,10 @@ export function V3_Chat({
               onClick={() => setShowIdeas(true)}
               style={{
                 alignSelf: 'flex-start', cursor: 'pointer', marginTop: 2,
-                padding: '9px 15px', borderRadius: 20,
-                background: LOVIFY.orangeGradientSoft, border: `1.5px solid ${LOVIFY.orange}`,
-                fontFamily: SANS, fontSize: 13.5, fontWeight: 800, color: LOVIFY.orangeDeep,
-                display: 'inline-flex', alignItems: 'center', gap: 7,
-                boxShadow: '0 6px 16px -10px rgba(216,92,28,0.5)',
+                padding: '7px 13px', borderRadius: 18,
+                background: 'rgba(255, 251, 244, 0.7)', border: `1px solid ${LOVIFY.line}`,
+                fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >
               {ideasLabel}
