@@ -1458,21 +1458,6 @@ function ChatReveal({
         </span>
       </div>
 
-      {/* Retention — the daily ritual + "chapter one" framing, right where the
-          song lands. The first song is the start of the story, not the end. */}
-      {songReady && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3 }}
-          style={{ padding: '12px 15px', borderRadius: 16, background: LOVIFY.orangeGradientSoft, border: `1.5px solid ${LOVIFY.line}`, display: 'flex', flexDirection: 'column', gap: 7 }}
-        >
-          <span style={{ fontFamily: SANS, fontSize: 13.5, color: LOVIFY.ink, lineHeight: 1.5 }}>
-            <strong>🌅 Your ritual:</strong> tomorrow, when your alarm goes off — press play. Every morning. That&apos;s how you rewire.
-          </span>
-          <span style={{ fontFamily: SANS, fontSize: 13.5, color: LOVIFY.ink, lineHeight: 1.5 }}>
-            This is <strong>chapter one</strong> of your comeback. When you&apos;re ready for the next chapter, come back and tell me what you&apos;re changing next — we&apos;ll write that song too.
-          </span>
-        </motion.div>
-      )}
     </motion.div>
   );
 }
