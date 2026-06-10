@@ -1152,7 +1152,7 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'user', reply: "Waking up excited for my day" },
   { who: 'user', reply: "Proud of what I see in the mirror" },
   { who: 'user', reply: "My family saying I seem happier ✨" },
-  { who: 'bot', text: "That's where we're going. Step 3 — the way out. What would you tell your best friend to do?" },
+  { who: 'bot', text: "That's where we're going. Step 3 — here are the traits and daily moves of the woman who lives that life. Pick your favorites:" },
   { who: 'user', reply: "Wake up early. Make time for herself." },
   { who: 'user', reply: "Get her body moving again" },
   { who: 'user', reply: "Plan the life she actually wants" },
@@ -1904,7 +1904,7 @@ export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean
 const COMEBACK_STEPS: { e: string; t: string }[] = [
   { e: '❌', t: "Vent out what's bugging you" },
   { e: '✨', t: 'Describe the best version of you' },
-  { e: '🧭', t: 'Map the steps to get there' },
+  { e: '🧭', t: 'Pick the traits & habits that get you there' },
 ];
 export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: boolean }) {
   return (

@@ -80,12 +80,11 @@ export interface ChatResult {
 // ideas are AI-generated from what the user just vented (see the suggest
 // helpers below); these banks are the offline/failure fallbacks.
 export interface IdeaSection { title?: string; ideas: string[] }
-// Q2 fallback — legitimate, doable actions, grouped so the user can scan
-// categories and tap the ones that fit.
+// Q3 fallback — the best-version-of-you picker: character traits + consistent
+// daily actions (the AI personalizes both from their pain + dream).
 const FALLBACK_ACTION_SECTIONS: IdeaSection[] = [
-  { title: 'Body & energy', ideas: ['Get back in the gym', 'Walk every morning', 'Eat like I respect myself'] },
-  { title: 'Mind & peace', ideas: ['Wake up before my alarm, make time for me', 'Journal what I want, every morning', 'Cut the doom-scrolling at night'] },
-  { title: 'People & life', ideas: ['Say yes — to the date, the invite, the chance', 'Reconnect with a friend every week', 'Plan the life I want on Sunday nights'] },
+  { title: 'Character traits', ideas: ['Disciplined', 'Calm under pressure', 'Full of energy', 'Proud of myself', 'Consistent'] },
+  { title: 'Daily actions', ideas: ['Wake up before my alarm', 'Train every morning', 'Plan my week on Sundays', 'Eat like I respect myself', 'Show up for the people I love'] },
 ];
 // Q3 fallback — best-case-scenario moments.
 const FALLBACK_DREAM_IDEAS: IdeaSection[] = [
@@ -275,17 +274,19 @@ async function suggestIdeas(body: { kind: 'actions' | 'dreams' | 'visions'; pain
 
 const clip = (s: unknown) => String(s ?? '').trim().slice(0, 60);
 
-/** Concrete action ideas bridging THEIR pain to THEIR dream, grouped in
- *  categories named after their struggles. (Asked third, after the dream.) */
+/** The best version of THEM, ready to pick from: character traits + the
+ *  consistent daily actions that get them to their dream. (Asked third.) */
 async function suggestActionSections(pain: string, dream: string): Promise<IdeaSection[]> {
   const j = (await suggestIdeas({ kind: 'actions', pain, dream })) as {
-    categories?: { title?: string; ideas?: unknown[] }[];
+    traits?: unknown[];
+    actions?: unknown[];
   };
-  const sections = (j.categories || [])
-    .slice(0, 3)
-    .map((c) => ({ title: clip(c.title), ideas: (c.ideas || []).map(clip).filter(Boolean).slice(0, 4) }))
-    .filter((c) => c.ideas.length);
-  if (!sections.length) throw new Error('empty categories');
+  const traits = (j.traits || []).map(clip).filter(Boolean).slice(0, 6);
+  const acts = (j.actions || []).map(clip).filter(Boolean).slice(0, 6);
+  const sections: IdeaSection[] = [];
+  if (traits.length) sections.push({ title: 'Character traits', ideas: traits });
+  if (acts.length) sections.push({ title: 'Daily actions', ideas: acts });
+  if (!sections.length) throw new Error('empty traits/actions');
   return sections;
 }
 
@@ -510,14 +511,11 @@ export function V3_Chat({
   }, [phase, actionIdeas, dreamIdeas]);
   const ideasPending = !ideasTimedOut
     && ((phase === 'actions' && !actionIdeas) || (phase === 'dream' && !dreamIdeas));
-  // Categorized lists (actions) render as a compact accordion: tap a category
-  // to open its ideas — far less overwhelming than 9 buttons at once.
-  const [openSection, setOpenSection] = useState<number | null>(null);
   // The dream step keeps its ideas BEHIND a "✨ Help me imagine" button — the
   // wish moment belongs to the user's own words first; the AI list is a hand
   // for whoever needs one, not the default.
   const [showDreamIdeas, setShowDreamIdeas] = useState(false);
-  useEffect(() => { setOpenSection(null); setShowDreamIdeas(false); }, [phase]);
+  useEffect(() => { setShowDreamIdeas(false); }, [phase]);
 
   // ── Text answers (name / pain / actions / dream) ──
   // Accepts an explicit value so tapped "Help me…" ideas can move forward too.
@@ -575,8 +573,8 @@ export function V3_Chat({
       setPhase('actions');
       botSay([
         `Now THAT's a life worth fighting for. 🔥`,
-        `So how do we get you there? If the best version of you took over tomorrow morning, what would they do — day by day?`,
-        `Open a category below for ideas, or type your own 👇`,
+        `We've identified the traits and daily actions of the ${name} who already lives that life.`,
+        `Pick your 4 favorites below — and/or type your own 👇`,
       ], 'text');
     } else if (phase === 'actions') {
       data.current.actions = value;
@@ -797,7 +795,6 @@ export function V3_Chat({
     setDreamIdeas(null);
     setVisionIdeas(null);
     setIdeasTimedOut(false);
-    setOpenSection(null);
     setShowDreamIdeas(false);
     actionReqRef.current = false;
     dreamReqRef.current = false;
@@ -919,43 +916,34 @@ export function V3_Chat({
               {currentIdeaSections().map((sec, si) => (
                 <div key={sec.title || si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {sec.title && (
-                    <button
-                      onClick={() => setOpenSection(openSection === si ? null : si)}
-                      style={{
-                        textAlign: 'left', cursor: 'pointer', width: '100%',
-                        padding: '12px 15px', borderRadius: 16,
-                        background: openSection === si ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
-                        border: `1.5px solid ${openSection === si ? LOVIFY.orange : LOVIFY.line}`,
-                        fontFamily: SANS, fontSize: 13.5, fontWeight: 800, color: LOVIFY.ink,
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)',
-                      }}
-                    >
-                      <span>{sec.title}</span>
-                      <span style={{ color: LOVIFY.orangeDeep }}>{openSection === si ? '▴' : '▾'}</span>
-                    </button>
+                    <div style={{ fontFamily: SANS, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.subSoft, padding: '4px 2px 0' }}>
+                      {sec.title}
+                    </div>
                   )}
-                  {(!sec.title || openSection === si) && sec.ideas.map((idea) => {
-                    const sel = web && selectedIdeas.includes(idea);
-                    return (
-                      <button
-                        key={idea}
-                        onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
-                        style={{
-                          textAlign: 'left', cursor: 'pointer', width: '100%',
-                          padding: '12px 15px', borderRadius: 16,
-                          background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
-                          border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
-                          fontFamily: SANS, fontSize: 14, lineHeight: 1.4, color: LOVIFY.ink, fontWeight: sel ? 700 : 400,
-                          display: 'flex', gap: 9, alignItems: 'center',
-                          boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)',
-                        }}
-                      >
-                        <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
-                        <span>{idea}</span>
-                      </button>
-                    );
-                  })}
+                  {/* Light wrap of pill chips — scannable, not a wall of rows. */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {sec.ideas.map((idea) => {
+                      const sel = web && selectedIdeas.includes(idea);
+                      return (
+                        <button
+                          key={idea}
+                          onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
+                          style={{
+                            textAlign: 'left', cursor: 'pointer',
+                            padding: '9px 13px', borderRadius: 999,
+                            background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
+                            border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
+                            fontFamily: SANS, fontSize: 13.5, lineHeight: 1.35, color: LOVIFY.ink, fontWeight: sel ? 700 : 500,
+                            display: 'inline-flex', gap: 6, alignItems: 'center',
+                            boxShadow: '0 4px 12px -8px rgba(216,92,28,0.4)',
+                          }}
+                        >
+                          <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
+                          <span>{idea}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
               {web && selectedIdeas.length > 0 && (

@@ -42,8 +42,10 @@ Given what hurts, their action plan, and their dream (their own words), create 4
 For each: a single fitting emoji; a short user-facing title (max 7 words, first person feel, e.g. "Date night, laughing like we used to"); and an image-generation prompt written as "as myself …" describing them in that scene — photorealistic, cinematic, warm golden light, emotionally specific.`;
 
     const systemPrompt = isVisions ? visionsSystemPrompt : isActions
-      ? `You help people who are turning their lives around brainstorm what the best version of them would DO.
-Given what hurts in their life and the dream life they want (their own words), reply with exactly 3 brainstorm categories of daily actions that bridge FROM the pain TO that dream. Name each category after one of THEIR actual struggles or goals (2-4 punchy words — e.g. relationship pain → "Rebuild the spark"). 3 actions per category: first person, verb-first, max 7 words, concrete enough to start today, clearly connected to what they said — never generic self-help filler. Cover every distinct pain they mentioned.`
+      ? `You help people see the version of themselves who ALREADY lives their dream life.
+Given what hurts now and the dream they want (their own words), describe that best version of them:
+1. traits — 5 short personality/character traits that version embodies (1-3 words each, e.g. "Calm under pressure", "Disciplined", "Playful with her") — specific to their situation, never generic filler.
+2. actions — 5 things that version does on a consistent basis (verb-first, max 7 words, concrete enough to picture, tied directly to the pains and dreams they named).`
       : `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just vented what hurts.
 
 Reply with two things:
@@ -55,7 +57,7 @@ Reply with two things:
     const userContent = isVisions
       ? `What hurts right now, in their own words:\n\n"${pain}"\n\nTheir plan to climb out:\n\n"${actions || ""}"\n\nTheir dream life, in their own words:\n\n"${dream || ""}"\n\nCreate the 4 vision options.`
       : isActions
-      ? `What hurts right now, in their own words:\n\n"${pain}"\n\nThe dream life they want, in their own words:\n\n"${dream || ""}"\n\nSuggest the action ideas that bridge from the pain to the dream.`
+      ? `What hurts right now, in their own words:\n\n"${pain}"\n\nThe dream life they want, in their own words:\n\n"${dream || ""}"\n\nDescribe the traits and consistent actions of the version of them who already lives that dream.`
       : `What hurts right now, in their own words:\n\n"${pain}"\n\nReply with the reflection and the best-case-scenario moments.`;
 
     const visionsTool = {
@@ -90,31 +92,24 @@ Reply with two things:
       : isActions
       ? {
           name: "suggest_actions",
-          description: "Suggest 3 categories of concrete comeback actions bridging pain to dream, 3 ideas each",
+          description: "Describe the best version of them: 5 character traits + 5 consistent daily actions",
           input_schema: {
             type: "object",
             properties: {
-              categories: {
+              traits: {
                 type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    title: { type: "string", description: "Category named after one of THEIR struggles (2-4 punchy words)" },
-                    ideas: {
-                      type: "array",
-                      items: { type: "string", description: "First person, starts with a verb, max 7 words, tied to what they said" },
-                      minItems: 3,
-                      maxItems: 3,
-                    },
-                  },
-                  required: ["title", "ideas"],
-                  additionalProperties: false,
-                },
-                minItems: 3,
-                maxItems: 3,
+                items: { type: "string", description: "Short personality/character trait, 1-3 words, specific to their situation" },
+                minItems: 5,
+                maxItems: 5,
+              },
+              actions: {
+                type: "array",
+                items: { type: "string", description: "Verb-first consistent action, max 7 words, tied to what they said" },
+                minItems: 5,
+                maxItems: 5,
               },
             },
-            required: ["categories"],
+            required: ["traits", "actions"],
             additionalProperties: false,
           },
         }
