@@ -28,8 +28,12 @@ const demoCover = '/assets/onboarding/album-cover.png';
 // Two real demo songs the roleplay "creates" at the end (playable).
 const demoSong1 = '/assets/onboarding/v3/demo-song-1.mp3';
 const demoSong2 = '/assets/onboarding/v3/demo-song-2.mp3';
-const webDemoSong = '/assets/onboarding/v3/web-demo-ten-feet-tall.mp3';
-const webDemoSong2 = '/assets/onboarding/v3/web-demo-ten-feet-tall-v2.mp3';
+// Nurse-comeback demo assets (the acted-out persona on /comeback1): her photo
+// (the 📷 step + the song row art), her vision (Disneyland with her son), and
+// the real nurse comeback track.
+const nursePhoto = '/assets/onboarding/comeback1/nurse-photo.jpg';
+const nurseVision = '/assets/onboarding/comeback1/nurse-vision.jpg';
+const nurseSong = '/assets/onboarding/comeback1/nurse-song.mp3';
 // Premium illustrated heroes (Kive.ai) — warm, headphones, dreamy. home-hero is
 // the heart/sway for the landing; hero-float is the arms-wide joyful release.
 const homeHero = '/assets/onboarding/v3/home-hero.png';
@@ -1097,13 +1101,11 @@ const DEMO_SONGS: DemoSong[] = [
   { cover: demoVision, vision: demoCover, title: 'Fearless', sub: 'Empowering Anthem', audio: demoSong2 },
 ];
 
-// Web-funnel demo songs — retitled to the comeback arc acted out above.
-// NOTE: the audio still plays the original "Ten Feet Tall" tracks until the
-// real comeback demo track is dropped in (one-line swap of `audio`).
-// App keeps DEMO_SONGS untouched.
+// Web-funnel demo song — ONE song: the real nurse comeback track, with her
+// photo as the row art and her Disneyland vision on top. App keeps DEMO_SONGS
+// untouched.
 const WEB_DEMO_SONGS: DemoSong[] = [
-  { cover: demoCover, vision: demoVision, title: "Comin' Back to Life", sub: 'Comeback Anthem', audio: webDemoSong },
-  { cover: demoVision, vision: demoCover, title: "Comin' Back to Life (v2)", sub: 'Comeback Anthem', audio: webDemoSong2 },
+  { cover: nursePhoto, vision: nurseVision, title: "Comin' Back to Life", sub: 'Comeback Anthem', audio: nurseSong },
 ];
 
 // A full create session, acted out: intro → dream → detail → why → photo →
@@ -1153,7 +1155,7 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'user', reply: "Book the trip. Wear the dress." },
   { who: 'user', reply: "My daughter saying — mama, you're glowing ✨" },
   { who: 'bot', text: "Beautiful. Add your photo so you can see her — the you you're coming back to." },
-  { who: 'user', reply: '📷 Add photo', photo: demoPhoto },
+  { who: 'user', reply: '📷 Add photo', photo: nursePhoto },
   { who: 'bot', text: "Perfect 🙌 What's the energy of your comeback song?" },
   { who: 'user', reply: "A comeback anthem 🔥" },
   { who: 'bot', text: "Here's your comeback song — from the life you hate to the life you love:" },
@@ -1169,8 +1171,8 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
     "I'm not just survivin' — I'm finally livin' the life I choose",
   ] },
   { who: 'user', reply: "Turn it into a song 🎶" },
-  { who: 'bot', text: "Perfect — I made two versions for you, each with your vision ✨" },
-  { who: 'bot', text: "Listen and save your favorite song below" },
+  { who: 'bot', text: "Perfect — here's your song, with your vision ✨" },
+  { who: 'bot', text: "Press play, then save your song below" },
   { who: 'bot', songset: WEB_DEMO_SONGS },
   // Picked via the per-song "I love this one" buttons (pick: true → no bottom chip).
   { who: 'user', reply: "Saved! ❤️", pick: true },
