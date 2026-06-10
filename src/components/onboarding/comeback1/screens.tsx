@@ -1137,8 +1137,8 @@ const DEMO_SCRIPT: DemoEvent[] = [
 // action steps → the amazing life. Same 3 questions the real song chat asks,
 // so the demo teaches the user exactly what's about to happen to them.
 const WEB_DEMO_SCRIPT: DemoEvent[] = [
-  { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you how to make a comeback song." },
-  { who: 'bot', text: "Step 1 — vent it. What do you hate about your life right now?" },
+  { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you an example of how to make your first Comeback Song." },
+  { who: 'bot', text: "Step 1 — vent it. What's paining you the most in life right now?" },
   // Rapid-fire venting: three short chips in a row, in the raw voice of someone
   // who's actually pissed off — so the viewer imagines firing off their own.
   { who: 'user', reply: "I work my ass off and I'm still drowning" },
@@ -1898,16 +1898,23 @@ export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean
 // The heads-up that makes the demo's "what do you hate about your life?"
 // land as step 1 of a known process instead of an ambush.
 const COMEBACK_STEPS: { e: string; t: string; d: string }[] = [
-  { e: '❌', t: 'Vent it', d: 'What do you hate about your life?' },
-  { e: '🧭', t: 'Brainstorm your way out', d: 'What would you do to fix it?' },
-  { e: '✨', t: 'Picture the life you want', d: "Imagine it like it's already yours." },
+  { e: '❌', t: 'Vent it', d: 'The pain and problems in your life right now.' },
+  { e: '🧭', t: 'Imagine the solutions', d: 'What would fix it?' },
+  { e: '✨', t: 'Picture the version of you who already has it', d: "Like it's already real." },
 ];
 export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: boolean }) {
   return (
     <SocReveal
-      title={<>Let&apos;s start by making a <LovAccent>Comeback Song</LovAccent>.</>}
+      title={<>One of the most powerful is the <LovAccent>Comeback Song</LovAccent>.</>}
       visual={
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 340 }}>
+          {/* The definition — why it's THE first song for our customer. */}
+          <p style={{ margin: '0 0 2px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.5, fontWeight: 600, color: LOVIFY.inkSoft, textAlign: 'center' }}>
+            The anthem of you coming back to who you were always meant to be.
+          </p>
+          <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.orangeDeep, padding: '2px 4px 0' }}>
+            How to make it
+          </div>
           {COMEBACK_STEPS.map((s, i) => (
             <div key={s.t} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${LOVIFY.line}`, boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)' }}>
               <span style={{ fontSize: 20, flexShrink: 0 }}>{s.e}</span>
@@ -1920,7 +1927,7 @@ export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: bo
         </div>
       }
       web={web}
-      body={<>We turn it into your anthem — and you press play every morning.</>}
+      body={<>We turn it into your anthem for bringing your life back together — and you press play every morning.</>}
       cta="Show me how it works"
       onNext={onNext}
       onBack={onBack}

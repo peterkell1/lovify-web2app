@@ -384,7 +384,7 @@ export function V3_Chat({
       setPhase('pain');
       botSay([
         `Okay ${fn}. Here's how your comeback song works: first what you don't want, then your way out, then the life you're walking into.`,
-        `Step 1 — vent it all. What do you hate about your life right now?`,
+        `Step 1 — vent it all. What's paining you the most in life right now?`,
       ], 'text');
     } else if (phase === 'pain') {
       data.current.pain = value;
