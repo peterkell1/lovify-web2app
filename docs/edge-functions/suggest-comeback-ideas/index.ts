@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { kind, pain, actions } = await req.json();
+    const { kind, pain, actions, dream } = await req.json();
 
     if (!pain || String(pain).trim().length === 0) {
       return new Response(
@@ -34,9 +34,14 @@ Deno.serve(async (req) => {
       throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
-    const isActions = kind !== "dreams";
+    const isVisions = kind === "visions";
+    const isActions = !isVisions && kind !== "dreams";
 
-    const systemPrompt = isActions
+    const visionsSystemPrompt = `You help people who are turning their lives around SEE their best-case future.
+Given what hurts, their action plan, and their dream (their own words), create 4 vision-image options of THEM living that future — each a specific, concrete scene tied directly to what they said (their relationship, their body, their work, their family — whatever THEY named). The dream side only, never the pain.
+For each: a single fitting emoji; a short user-facing title (max 7 words, first person feel, e.g. "Date night, laughing like we used to"); and an image-generation prompt written as "as myself …" describing them in that scene — photorealistic, cinematic, warm golden light, emotionally specific.`;
+
+    const systemPrompt = isVisions ? visionsSystemPrompt : isActions
       ? `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just vented what hurts.
 
 Reply with two things:
@@ -48,11 +53,42 @@ Reply with two things:
 Given what is hurting in someone's life and the action plan they came up with (their own words), suggest vivid best-case-scenario MOMENTS of their future life — like scenes from a mind-movie, specific to them, not generic.
 Each moment: first person, present tense, max 8 words, emotionally vivid.`;
 
-    const userContent = isActions
+    const userContent = isVisions
+      ? `What hurts right now, in their own words:\n\n"${pain}"\n\nTheir plan to climb out:\n\n"${actions || ""}"\n\nTheir dream life, in their own words:\n\n"${dream || ""}"\n\nCreate the 4 vision options.`
+      : isActions
       ? `What hurts right now, in their own words:\n\n"${pain}"\n\nSuggest the action ideas.`
       : `What hurts right now, in their own words:\n\n"${pain}"\n\nTheir plan to climb out:\n\n"${actions || ""}"\n\nSuggest the best-case-scenario moments.`;
 
-    const tool = isActions
+    const visionsTool = {
+      name: "suggest_visions",
+      description: "Create 4 personalized vision-image options of their dream future",
+      input_schema: {
+        type: "object",
+        properties: {
+          visions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                emoji: { type: "string", description: "Single fitting emoji" },
+                title: { type: "string", description: "Short user-facing title, max 7 words" },
+                prompt: { type: "string", description: 'Image prompt starting "as myself", photorealistic, cinematic, specific to their dream' },
+              },
+              required: ["emoji", "title", "prompt"],
+              additionalProperties: false,
+            },
+            minItems: 4,
+            maxItems: 4,
+          },
+        },
+        required: ["visions"],
+        additionalProperties: false,
+      },
+    };
+
+    const tool = isVisions
+      ? visionsTool
+      : isActions
       ? {
           name: "suggest_actions",
           description: "Reflect what was heard, then suggest 3 categories of concrete comeback actions, 3 ideas each",

@@ -117,6 +117,11 @@ const SOUND_LOADING_LINES = [
   'Matching sounds to your comeback…',
   'Tuning the energy…',
 ];
+const IDEA_LOADING_LINES = [
+  'Brainstorming ideas from your story…',
+  'Reading what you wrote…',
+  'Picturing your best-case moments…',
+];
 const WRITING_LINES = [
   'Reading your story…',
   'Finding your comeback arc…',
@@ -249,7 +254,7 @@ function buildComebackLyricsPrompt(a: { name: string; pain: string; actions: str
 // Pre-warmed the moment the previous answer lands so ideas are usually ready
 // by the time the user taps for help. Until the function is deployed — or on
 // any failure — the static banks above fill in silently.
-async function suggestIdeas(body: { kind: 'actions' | 'dreams'; pain: string; actions?: string }): Promise<unknown> {
+async function suggestIdeas(body: { kind: 'actions' | 'dreams' | 'visions'; pain: string; actions?: string; dream?: string }): Promise<unknown> {
   const res = await fetch(`${publicEnv.supabaseUrl}/functions/v1/suggest-comeback-ideas`, {
     method: 'POST',
     headers: {
@@ -286,6 +291,19 @@ async function suggestDreamSections(pain: string, actions: string): Promise<Idea
   const ideas = (j.ideas || []).map(clip).filter(Boolean).slice(0, 7);
   if (!ideas.length) throw new Error('empty ideas');
   return [{ ideas }];
+}
+
+/** Personalized vision-image options of THEIR dream future (image step). */
+async function suggestVisionIdeas(pain: string, actions: string, dream: string): Promise<{ e: string; t: string; prompt: string }[]> {
+  const j = (await suggestIdeas({ kind: 'visions', pain, actions, dream })) as {
+    visions?: { emoji?: string; title?: string; prompt?: string }[];
+  };
+  const v = (j.visions || [])
+    .map((x) => ({ e: String(x.emoji || '✨').slice(0, 4), t: clip(x.title), prompt: String(x.prompt || '').trim().slice(0, 500) }))
+    .filter((x) => x.t && x.prompt)
+    .slice(0, 4);
+  if (!v.length) throw new Error('empty visions');
+  return v;
 }
 
 // Everything needed to restore the chat exactly where the user left off when
@@ -342,7 +360,6 @@ export function V3_Chat({
   const [phase, setPhase] = useState<Phase>(() => persisted?.phase ?? 'name');
   const [mode, setMode] = useState<InputMode>(() => persisted?.mode ?? 'busy');
   const [draft, setDraft] = useState('');
-  const [showIdeas, setShowIdeas] = useState(false);
   // Web "Help me…" is multi-select: tap several short ideas, then Continue.
   const [selectedIdeas, setSelectedIdeas] = useState<string[]>([]);
   const toggleIdea = (idea: string) =>
@@ -352,8 +369,10 @@ export function V3_Chat({
   // AI replies. Guarded so each is requested once per run.
   const [actionIdeas, setActionIdeas] = useState<IdeaSection[] | null>(null);
   const [dreamIdeas, setDreamIdeas] = useState<IdeaSection[] | null>(null);
+  const [visionIdeas, setVisionIdeas] = useState<{ e: string; t: string; prompt: string }[] | null>(null);
   const actionReqRef = useRef(false);
   const dreamReqRef = useRef(false);
+  const visionReqRef = useRef(false);
   const [vibes, setVibes] = useState<SoundVibe[]>(() => persisted?.vibes ?? []);
   // True once lyrics are confirmed — the reveal (vision + songs) renders inline
   // at the bottom of the chat. Restored straight to revealed on back-nav.
@@ -473,7 +492,16 @@ export function V3_Chat({
     if (phase === 'dream') return dreamIdeas ?? FALLBACK_DREAM_IDEAS;
     return [];
   };
-  const ideasLabel = phase === 'actions' ? '✨ Need a few ideas?' : '✨ Help me imagine it';
+  // Dream ideas may still be generating when the question lands — show a
+  // brainstorming loader briefly, then fall back to the static bank so the
+  // list always appears.
+  const [dreamIdeasTimedOut, setDreamIdeasTimedOut] = useState(false);
+  useEffect(() => {
+    if (phase !== 'dream' || dreamIdeas) return;
+    const t = window.setTimeout(() => setDreamIdeasTimedOut(true), 9000);
+    return () => window.clearTimeout(t);
+  }, [phase, dreamIdeas]);
+  const dreamIdeasPending = phase === 'dream' && !dreamIdeas && !dreamIdeasTimedOut;
 
   // ── Text answers (name / pain / actions / dream) ──
   // Accepts an explicit value so tapped "Help me…" ideas can move forward too.
@@ -483,7 +511,6 @@ export function V3_Chat({
     const value = (override ?? draft).trim();
     if (!value) return;
     setDraft('');
-    setShowIdeas(false);
     setSelectedIdeas([]);
     pushUser(value);
 
@@ -515,7 +542,8 @@ export function V3_Chat({
         setMsgs((m) => m.filter((x) => x.id !== tid));
         botSay([
           (r && r.reflection) || `Thank you for being real with me, ${name}. Getting it all out is the first step — now we find the way out.`,
-          `So let's brainstorm: if the best version of you took over tomorrow morning, what would they DO — day by day — to climb out of this? Type whatever comes to mind.`,
+          `If the best version of you took over tomorrow morning, what would they do — day by day — to climb out of this?`,
+          `Select a few ideas from the list below, or type your own at the bottom 👇`,
         ], 'text');
       });
     } else if (phase === 'actions') {
@@ -529,12 +557,21 @@ export function V3_Chat({
       setPhase('dream');
       botSay([
         `That's the comeback plan — you already know the way back. 💪 Your song is going to plant it in your mind, every time you press play.`,
-        `Now imagine it worked — all of it. What's the most amazing life you can picture, ${name}? What does it feel like?`,
+        `Now imagine it worked — all of it. What's the most amazing life you can picture, ${name}?`,
+        `Select a few below, or type your own 👇`,
       ], 'text');
     } else if (phase === 'dream') {
       data.current.dream = value;
       data.current.scene = value;             // legacy: the scene the vision falls back to
       data.current.songAbout = 'My comeback'; // legacy label for plumbing/analytics
+      // Pre-warm the personalized VISION options (shown after the photo) from
+      // everything they've told us — so the image choices depict THEIR dream.
+      if (!visionReqRef.current) {
+        visionReqRef.current = true;
+        suggestVisionIdeas(data.current.pain, data.current.actions, value)
+          .then(setVisionIdeas)
+          .catch(() => { /* static vision set covers it */ });
+      }
       setPhase('photo');
       botSay([
         `That's not a fantasy, ${name} — that's you, on the other side of the comeback.`,
@@ -558,18 +595,13 @@ export function V3_Chat({
       `What vision of the future do you want to see yourself in, ${name}?`,
     ], 'visionScene');
   };
-  const skipPhoto = () => {
-    pushUser('Maybe later');
-    data.current.faces = [];
-    data.current.face = null;
-    setPhase('visionScene');
-    botSay([`No worries — we can add it anytime.`, `What vision of the future do you want to see yourself in, ${name}?`], 'visionScene');
-  };
+  // No skip on the photo step — seeing THEMSELF in the vision is the payoff,
+  // and the very next step picks the future scene they'll appear in.
 
   // ── Vision-scene (image look) chosen → pre-warm the image, move to sound ──
-  // Always the comeback set — the image shows the dream side (data.scene holds
-  // the user's dream answer, so the generator's fallback is on-arc too).
-  const visionSceneIdeas = () => COMEBACK_VISION_IDEAS;
+  // AI-personalized options of THEIR dream future (pre-warmed at the dream
+  // answer); the static comeback set covers failures/slow networks.
+  const visionSceneIdeas = () => visionIdeas ?? COMEBACK_VISION_IDEAS;
   const chooseVisionScene = (idea: { t: string; prompt: string }) => {
     data.current.visionScene = idea.prompt;
     pushUser(idea.t);
@@ -691,12 +723,17 @@ export function V3_Chat({
     submitText();
   };
 
-  // The bottom-right ↑ doubles as the "Continue" for multi-select ideas: if the
-  // user has typed something, send that; otherwise submit their selected ideas.
+  // The bottom-right ↑ doubles as the "Continue" for multi-select ideas. If
+  // the user selected ideas AND typed their own, BOTH go into the answer —
+  // everything they gave us counts.
   const sendActive = () => !!draft.trim() || selectedIdeas.length > 0;
   const sendOrContinue = () => {
-    if (draft.trim()) { submitFreeText(); return; }
-    if (selectedIdeas.length) submitText(selectedIdeas.join(', '));
+    const typed = draft.trim();
+    if (mode === 'text' && selectedIdeas.length) {
+      submitText([...selectedIdeas, typed].filter(Boolean).join('. '));
+      return;
+    }
+    if (typed) submitFreeText();
   };
 
   // Steps where the bottom text bar is live. Chip steps (sound/voice/
@@ -736,14 +773,16 @@ export function V3_Chat({
     setMsgs([]);
     setPhase('name');
     setDraft('');
-    setShowIdeas(false);
     setSelectedIdeas([]);
     // Clear the AI-personalized ideas + their request guards — otherwise a
     // replay shows the PREVIOUS run's suggestions for the new run's answers.
     setActionIdeas(null);
     setDreamIdeas(null);
+    setVisionIdeas(null);
+    setDreamIdeasTimedOut(false);
     actionReqRef.current = false;
     dreamReqRef.current = false;
+    visionReqRef.current = false;
     setVibes([]);
     setRevealed(false);
     setStagedFaces([]);
@@ -826,23 +865,21 @@ export function V3_Chat({
           <Bubble key={m.id} msg={m} />
         ))}
 
-        {/* The "Help me…" affordance — Q2/Q3 only (the pain question gets no
-            crutch: we want their own words). Deliberately QUIET so the user's
-            focus stays on typing; it's a light hand for whoever needs one.
-            Ideas are AI-personalized to what they vented (fallback bank until
-            then), grouped in tappable multi-select categories. */}
+        {/* The brainstorm ideas — Q2/Q3 only (the pain question gets no crutch:
+            we want their own words). Shown AUTOMATICALLY under the question:
+            AI-personalized to what they vented, grouped in tappable
+            multi-select categories. Tapping a few AND typing combine into one
+            answer when they hit ↑. */}
         {mode === 'text' && (phase === 'actions' || phase === 'dream') && (
-          showIdeas ? (
+          dreamIdeasPending ? (
+            <div style={{ alignSelf: 'flex-start' }}>
+              <LoaderLine lines={IDEA_LOADING_LINES} />
+            </div>
+          ) : (
             <motion.div
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
-                <span style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
-                  {web ? 'Tap the ones that fit — or write your own' : 'Tap one that feels true — or write your own'}
-                </span>
-                <button onClick={() => { setShowIdeas(false); setSelectedIdeas([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.sub }}>Close</button>
-              </div>
               {currentIdeaSections().map((sec, si) => (
                 <div key={sec.title || si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {sec.title && (
@@ -875,24 +912,10 @@ export function V3_Chat({
               ))}
               {web && selectedIdeas.length > 0 && (
                 <div style={{ alignSelf: 'flex-start', padding: '2px 4px 0', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
-                  {selectedIdeas.length} selected — tap ↑ to continue
+                  {selectedIdeas.length} selected — add your own below, then tap ↑
                 </div>
               )}
             </motion.div>
-          ) : (
-            <motion.button
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              onClick={() => setShowIdeas(true)}
-              style={{
-                alignSelf: 'flex-start', cursor: 'pointer', marginTop: 2,
-                padding: '7px 13px', borderRadius: 18,
-                background: 'rgba(255, 251, 244, 0.7)', border: `1px solid ${LOVIFY.line}`,
-                fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub,
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              {ideasLabel}
-            </motion.button>
           )
         )}
 
@@ -1015,7 +1038,6 @@ export function V3_Chat({
             onAdd={addStagedFace}
             onRemove={removeStagedFace}
             onDone={confirmPhotos}
-            onSkip={skipPhoto}
           />
         )}
 
@@ -1414,14 +1436,14 @@ function Choice({ children, onClick, sub }: { children: React.ReactNode; onClick
 }
 
 // ── Inline multi-photo picker (you + partner / family / friends) ──
+// No skip: the photo is required — the next step puts THEM in their vision.
 function PhotoInput({
-  faces, onAdd, onRemove, onDone, onSkip,
+  faces, onAdd, onRemove, onDone,
 }: {
   faces: string[];
   onAdd: (face: string) => void;
   onRemove: (i: number) => void;
   onDone: () => void;
-  onSkip: () => void;
 }) {
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1470,7 +1492,7 @@ function PhotoInput({
         </label>
       )}
 
-      {faces.length > 0 ? (
+      {faces.length > 0 && (
         <button
           onClick={onDone}
           style={{
@@ -1480,10 +1502,6 @@ function PhotoInput({
           }}
         >
           Continue{faces.length > 1 ? ` with all ${faces.length}` : ''} →
-        </button>
-      ) : (
-        <button onClick={onSkip} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', fontFamily: SANS, fontSize: 14, fontWeight: 600, color: LOVIFY.sub }}>
-          Maybe later
         </button>
       )}
     </div>
