@@ -7,13 +7,13 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LOVIFY, SANS, SERIF } from './theme';
+import { LOVIFY, SANS, SERIF } from '@/components/onboarding/v3/theme';
 import {
   LovScreen, LovBack, LovSkip, LovHeading, LovAccent,
   LovPrimary, LovGhost, LovCircleBtn, LovLogo, LovOption, LovChip, LovSelectRow,
   LegalRow,
-} from './primitives';
-import { suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe } from './generation';
+} from '@/components/onboarding/v3/primitives';
+import { suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe } from '@/components/onboarding/v3/generation';
 import { promptPushPermission } from '@/lib/onesignal';
 import { capturePostHogEvent } from '@/lib/posthog';
 import { requestTrackingPermission } from '@/lib/tracking-consent';
@@ -28,8 +28,12 @@ const demoCover = '/assets/onboarding/album-cover.png';
 // Two real demo songs the roleplay "creates" at the end (playable).
 const demoSong1 = '/assets/onboarding/v3/demo-song-1.mp3';
 const demoSong2 = '/assets/onboarding/v3/demo-song-2.mp3';
-const webDemoSong = '/assets/onboarding/v3/web-demo-ten-feet-tall.mp3';
-const webDemoSong2 = '/assets/onboarding/v3/web-demo-ten-feet-tall-v2.mp3';
+// Nurse-comeback demo assets (the acted-out persona on /comeback1): her photo
+// (the 📷 step + the song row art), her vision (Disneyland with her son), and
+// the real nurse comeback track.
+const nursePhoto = '/assets/onboarding/comeback1/nurse-photo.jpg';
+const nurseVision = '/assets/onboarding/comeback1/nurse-vision.jpg';
+const nurseSong = '/assets/onboarding/comeback1/nurse-song.mp3';
 // Premium illustrated heroes (Kive.ai) — warm, headphones, dreamy. home-hero is
 // the heart/sway for the landing; hero-float is the arms-wide joyful release.
 const homeHero = '/assets/onboarding/v3/home-hero.png';
@@ -1097,11 +1101,11 @@ const DEMO_SONGS: DemoSong[] = [
   { cover: demoVision, vision: demoCover, title: 'Fearless', sub: 'Empowering Anthem', audio: demoSong2 },
 ];
 
-// Web-funnel demo songs — both cards play the real "Ten Feet Tall" track so the
-// audio matches the acted-out dream + lyrics. App keeps DEMO_SONGS untouched.
+// Web-funnel demo song — ONE song: the real nurse comeback track, with her
+// photo as the row art and her Disneyland vision on top. App keeps DEMO_SONGS
+// untouched.
 const WEB_DEMO_SONGS: DemoSong[] = [
-  { cover: demoCover, vision: demoVision, title: 'Ten Feet Tall', sub: 'Upbeat Pop Anthem', audio: webDemoSong },
-  { cover: demoVision, vision: demoCover, title: 'Ten Feet Tall v2', sub: 'Upbeat Pop Anthem', audio: webDemoSong2 },
+  { cover: nursePhoto, vision: nurseVision, title: "Comin' Back to Life", sub: 'Comeback Anthem', audio: nurseSong },
 ];
 
 // A full create session, acted out: intro → dream → detail → why → photo →
@@ -1130,45 +1134,56 @@ const DEMO_SCRIPT: DemoEvent[] = [
 ];
 
 // Web-funnel variant of the demo session (kept fully separate so the native
-// app's DEMO_SCRIPT is never touched). Warmer, value-led copy throughout, with
-// lyrics tuned to the "one life — be fearless on stage" dream acted out here.
+// app's DEMO_SCRIPT is never touched). Acts out the NURSE COMEBACK — the
+// winning ad formula: pain → root cause (lost herself) → turning point →
+// action steps → the amazing life. Same 3 questions the real song chat asks,
+// so the demo teaches the user exactly what's about to happen to them.
 const WEB_DEMO_SCRIPT: DemoEvent[] = [
-  { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you how this works." },
-  { who: 'bot', text: "What do you want to improve about your life?" },
-  { who: 'user', reply: "I want to feel confident and finally believe in myself." },
-  { who: 'bot', text: "Love that. Paint me the picture — what does it look like?" },
-  { who: 'user', reply: "Honestly? Dancing on stage as a singer, totally fearless ✨" },
-  { who: 'bot', text: "Why does that matter so much to you?" },
-  { who: 'user', reply: "Because I only live once! I must be the best I can be with this one life I got!" },
-  { who: 'bot', text: "Beautiful. Please upload your photo so I can create a visionboard of you living your dream." },
-  { who: 'user', reply: '📷 Add photo', photo: demoPhoto },
-  { who: 'bot', text: "Perfect 🙌 What's the energy of the music?" },
-  { who: 'user', reply: "An upbeat pop anthem — something stadium-huge." },
-  { who: 'bot', text: "Amazing! Here's the beliefs and affirmations I recommend for lyrics to become this version of you." },
+  { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you an example of how to make your first Comeback Song." },
+  { who: 'bot', text: "Step 1 — vent it 😤 What do you hate about your life right now?" },
+  // Rapid-fire venting: three short chips in a row, in the raw voice of someone
+  // who's actually pissed off — so the viewer imagines firing off their own.
+  { who: 'user', reply: "I work my ass off and I'm still drowning" },
+  { who: 'user', reply: "I freaking hate who I've become" },
+  { who: 'user', reply: "I don't even recognize myself anymore" },
+  { who: 'bot', text: "I hear you. Somewhere along the way, you gave it all away — and lost yourself. Let's get her back." },
+  // Dream comes SECOND (best case first — lighter), then the steps.
+  { who: 'bot', text: "Step 2 — the magic wand 🪄 If you could change anything about you or your life, what would you wish for?" },
+  { who: 'user', reply: "Waking up excited for my day" },
+  { who: 'user', reply: "Proud of what I see in the mirror" },
+  { who: 'user', reply: "My family saying I seem happier ✨" },
+  { who: 'bot', text: "That's where we're going. Step 3 — build the comeback version of you, like creating your character 🎮 Pick her traits and daily moves:" },
+  { who: 'user', reply: "Wake up early. Make time for herself." },
+  { who: 'user', reply: "Get her body moving again" },
+  { who: 'user', reply: "Plan the life she actually wants" },
+  { who: 'bot', text: "That's the comeback plan. Add your photo so you can see her — the you you're coming back to." },
+  { who: 'user', reply: '📷 Add photo', photo: nursePhoto },
+  { who: 'bot', text: "Perfect 🙌 What's the energy of your comeback song?" },
+  { who: 'user', reply: "A comeback anthem 🔥" },
+  { who: 'bot', text: "Here's your comeback song — from the life you hate to the life you love:" },
+  // Near-verbatim lines from the winning "Nurse" formula.
   { who: 'bot', title: 'Your lyrics', lyrics: [
-    "I only live once, so I'm giving it all",
-    "Fearless and shining, I'm ten feet tall",
-    'Best version of me, watch me rise, watch me glow',
-    "I'm world-class, baby, and now I know",
-    'Oh-oh-oh, I believe, I believe',
-    'Oh-oh-oh, this is me, this is me',
+    'Twelve-hour shift, came home to an empty place',
+    "Caught my reflection, didn't know that face",
+    'I forgot who I was — gave it all away',
+    'God, I miss who I used to be',
+    "Hit play every mornin', rewirin' my mind",
+    "Wake up before my alarm, makin' time for me",
+    'Daughter said "mama, you\'re glowin\', what did you do?"',
+    "I'm not just survivin' — I'm finally livin' the life I choose",
   ] },
-  { who: 'user', reply: "Amazing! Now turn it into a song 🎶" },
-  { who: 'bot', text: "Perfect — I created two songs for you, each with your vision ✨" },
-  { who: 'bot', text: "Listen and save your favorite song below" },
+  { who: 'user', reply: "Turn it into a song 🎶" },
+  { who: 'bot', text: "Perfect — here's your song, with your vision ✨" },
+  { who: 'bot', text: "Press play, then save your song below" },
   { who: 'bot', songset: WEB_DEMO_SONGS },
   // Picked via the per-song "I love this one" buttons (pick: true → no bottom chip).
   { who: 'user', reply: "Saved! ❤️", pick: true },
-  // Yes-ladder — small agreements that build to the paywall.
-  { who: 'bot', text: "Amazing 🙌 Now imagine listening to this and feeling its energy every day." },
-  { who: 'bot', text: "Do you feel like your life would start to improve?" },
-  { who: 'user', reply: "Yes, for sure" },
-  { who: 'bot', text: "And that it could help you become a better person?" },
-  { who: 'user', reply: "100%" },
-  { who: 'bot', text: "Even help you create a life you truly love?" },
-  { who: 'user', reply: "Yes 🙌" },
-  { who: 'bot', text: "That's exactly what Lovify does — one song at a time." },
-  { who: 'user', reply: "Okay, this is incredible 😭" },
+  // Ritual + yes-beat — the retention frame, then straight at the heart.
+  { who: 'bot', text: "Tomorrow morning, when your alarm goes off — press play. Every day you listen, you rewire." },
+  { who: 'bot', text: "Can you feel how this could pull someone out?" },
+  { who: 'user', reply: "Yes, honestly I can." },
+  { who: 'bot', text: "That's Lovify — one comeback at a time." },
+  { who: 'user', reply: "I'm ready to make mine 🔥" },
 ];
 
 type DemoMsg = {
@@ -1842,7 +1857,75 @@ export function V3_WhyBuilt({ onNext, onBack, web }: NavProps & { web?: boolean 
       visual={<ImgHero src={heroLives} size={320} web={web} />}
       web={web}
       body={<>Positive lyrics on repeat plant empowering beliefs that move you toward your dream life so you become the person living it.</>}
-      cta="Show me the demo"
+      cta="Continue"
+      onNext={onNext}
+      onBack={onBack}
+    />
+  );
+}
+
+// ─── 15 · Many ways to change your life with music ────────────
+// Not about "making songs" — about the big moves members make in their lives,
+// so the comeback song on the next screen reads as the smart starting move.
+const SONG_IDEAS: { e: string; t: string }[] = [
+  { e: '🎯', t: 'Achieve a big goal' },
+  { e: '🔥', t: 'Start your comeback' },
+  { e: '💪', t: 'Overcome a big struggle' },
+  { e: '🎁', t: 'Gift a song to a friend' },
+  { e: '🏆', t: 'Imagine yourself a winner' },
+  { e: '📸', t: 'Capture a life memory' },
+];
+export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean }) {
+  return (
+    <SocReveal
+      title={<>There are many ways to <LovAccent>change your life</LovAccent> with music.</>}
+      visual={
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 340 }}>
+          {SONG_IDEAS.map((s) => (
+            <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 12px', borderRadius: 14, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${LOVIFY.line}`, boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)' }}>
+              <span style={{ fontSize: 18 }}>{s.e}</span>
+              <span style={{ fontFamily: SANS, fontSize: 13.5, fontWeight: 700, color: LOVIFY.ink }}>{s.t}</span>
+            </div>
+          ))}
+        </div>
+      }
+      web={web}
+      body={<>Every big move in your life can become a song you live to.</>}
+      cta="Continue"
+      onNext={onNext}
+      onBack={onBack}
+    />
+  );
+}
+
+// ─── 16 · The Comeback Song — the method, taught before the demo ──
+// The heads-up that makes the demo's "what do you hate about your life?"
+// land as step 1 of a known process instead of an ambush.
+const COMEBACK_STEPS: { e: string; t: string }[] = [
+  { e: '❌', t: "Vent out what's bugging you" },
+  { e: '✨', t: 'Describe the best version of you' },
+  { e: '🧭', t: 'Pick the traits & habits that get you there' },
+];
+export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: boolean }) {
+  return (
+    <SocReveal
+      title={<>Let&apos;s start with the <LovAccent>Comeback Song</LovAccent>.</>}
+      visual={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 340 }}>
+          <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.orangeDeep, padding: '0 4px' }}>
+            How to make it
+          </div>
+          {COMEBACK_STEPS.map((s, i) => (
+            <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '15px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${LOVIFY.line}`, boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)' }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{s.e}</span>
+              <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 800, color: LOVIFY.ink }}>{i + 1}. {s.t}</span>
+            </div>
+          ))}
+        </div>
+      }
+      web={web}
+      body={<>We turn it into your anthem. Press play every morning.</>}
+      cta="Show me how it works"
       onNext={onNext}
       onBack={onBack}
     />
@@ -3193,10 +3276,10 @@ export function V3_MakeSong({ onNext, onBack }: NavProps) {
         </div>
 
         <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: 800, fontSize: 26, letterSpacing: -0.6, lineHeight: 1.15, color: LOVIFY.ink }}>
-          Let's make your first song.
+          Let's make your comeback song.
         </h1>
         <p style={{ marginTop: 14, marginBottom: 0, fontFamily: SANS, fontSize: 16, lineHeight: 1.5, fontWeight: 500, color: LOVIFY.sub, maxWidth: 300 }}>
-          It's on us — completely free. Just a few quick questions and we'll write it for you.
+          It's on us — completely free. Three honest questions, and we'll turn your story into your comeback anthem.
         </p>
       </div>
 

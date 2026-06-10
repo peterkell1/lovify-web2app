@@ -26,8 +26,13 @@ export const LOVIFY = {
   orangeGradientSoft: 'linear-gradient(140deg, rgba(245,183,61,0.16), rgba(216,92,28,0.18))',
 } as const;
 
+// Montserrat / Playfair Display are loaded in app/layout.tsx via next/font and
+// exposed as CSS variables (--font-montserrat / --font-playfair). Referencing
+// the variables here keeps the self-hosted, no-layout-shift fonts wired up while
+// preserving the original family names as fallbacks.
 export const SANS =
-  '"Montserrat", -apple-system, "SF Pro Text", "SF Pro Display", system-ui, sans-serif';
+  'var(--font-montserrat), "Montserrat", -apple-system, "SF Pro Text", "SF Pro Display", system-ui, sans-serif';
 
 // Loaded font for emotional / editorial moments.
-export const SERIF = '"Playfair Display", "Cormorant Garamond", Georgia, serif';
+export const SERIF =
+  'var(--font-playfair), "Playfair Display", "Cormorant Garamond", Georgia, serif';

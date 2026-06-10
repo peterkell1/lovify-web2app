@@ -114,6 +114,11 @@ export interface GeneratedLyrics {
 export interface LyricsRequest {
   songAbout: string; detailText: string; scene: string; why: string;
   style: string; voice?: string; genres?: string[];
+  /** When set, sent verbatim as the user message instead of the default
+   *  dream-intake build below — lets a funnel variant request a specific
+   *  lyric structure (e.g. comeback1's pain→pleasure arc) without this
+   *  shared layer knowing about it. Omitted → behavior unchanged. */
+  promptOverride?: string;
   /** Streamed partial lyrics as they're written, for live typing in the UI. */
   onProgress?: (partialContent: string) => void;
 }
@@ -148,8 +153,10 @@ function extractPartialContent(args: string): string {
 }
 
 export async function generateLyrics(req: LyricsRequest): Promise<GeneratedLyrics> {
-  // Synthesize the "dream intake" as a single rich user message.
-  const userMessage = [
+  // Synthesize the "dream intake" as a single rich user message — unless the
+  // caller supplied a full prompt of its own (promptOverride), which is sent
+  // verbatim so a funnel variant can dictate the lyric structure.
+  const userMessage = req.promptOverride ?? [
     req.songAbout && `My song is about: ${req.songAbout}.`,
     req.detailText && `When I picture it in detail: ${req.detailText}`,
     req.scene && `The exact scene I imagine: ${req.scene}`,
