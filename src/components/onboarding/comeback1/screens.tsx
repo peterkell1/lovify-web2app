@@ -1137,7 +1137,7 @@ const DEMO_SCRIPT: DemoEvent[] = [
 // action steps → the amazing life. Same 3 questions the real song chat asks,
 // so the demo teaches the user exactly what's about to happen to them.
 const WEB_DEMO_SCRIPT: DemoEvent[] = [
-  { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you how this works." },
+  { who: 'bot', text: "Hey, I'm Lovify. 👋 Let me show you how to make a comeback song." },
   { who: 'bot', text: "Step 1 — vent it. What do you hate about your life right now?" },
   // Rapid-fire venting: three short chips in a row, in the raw voice of someone
   // who's actually pissed off — so the viewer imagines firing off their own.
@@ -1860,23 +1860,21 @@ export function V3_WhyBuilt({ onNext, onBack, web }: NavProps & { web?: boolean 
   );
 }
 
-// ─── 15 · Song ideas — you can turn anything into a song ──────
-// Breadth first: show the range of songs members make, so the comeback song
-// on the next screen reads as the smart STARTING point, not the only option.
+// ─── 15 · Many ways to change your life with music ────────────
+// Not about "making songs" — about the big moves members make in their lives,
+// so the comeback song on the next screen reads as the smart starting move.
 const SONG_IDEAS: { e: string; t: string }[] = [
-  { e: '👑', t: 'Confidence anthem' },
-  { e: '🧲', t: 'Manifest your goal' },
-  { e: '❤️', t: 'For someone you love' },
-  { e: '🧘', t: 'Calm your mind' },
-  { e: '🏋️', t: 'Gym hype song' },
-  { e: '💰', t: 'Money & freedom' },
-  { e: '🌅', t: 'Morning ritual' },
-  { e: '😴', t: 'Sleep & let go' },
+  { e: '🎯', t: 'Achieve a big goal' },
+  { e: '🔥', t: 'Start your comeback' },
+  { e: '💪', t: 'Overcome a big struggle' },
+  { e: '🎁', t: 'Gift a song to a friend' },
+  { e: '🏆', t: 'Imagine yourself a winner' },
+  { e: '📸', t: 'Capture a life memory' },
 ];
 export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean }) {
   return (
     <SocReveal
-      title={<>You can turn <LovAccent>anything</LovAccent> into a song.</>}
+      title={<>There are many ways to <LovAccent>change your life</LovAccent> with music.</>}
       visual={
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 340 }}>
           {SONG_IDEAS.map((s) => (
@@ -1888,7 +1886,7 @@ export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean
         </div>
       }
       web={web}
-      body={<>Members program every part of their life with personalized songs.</>}
+      body={<>Every big move in your life can become a song you live to.</>}
       cta="Continue"
       onNext={onNext}
       onBack={onBack}
@@ -1900,14 +1898,14 @@ export function V3_SongIdeas({ onNext, onBack, web }: NavProps & { web?: boolean
 // The heads-up that makes the demo's "what do you hate about your life?"
 // land as step 1 of a known process instead of an ambush.
 const COMEBACK_STEPS: { e: string; t: string; d: string }[] = [
-  { e: '❌', t: 'Vent it', d: "Get clear on what you don't want anymore." },
-  { e: '🧭', t: 'The way out', d: "The steps you'd tell your best friend to take." },
-  { e: '✨', t: "The life you're walking into", d: "Picture it like it's already yours." },
+  { e: '❌', t: 'Vent it', d: 'What do you hate about your life?' },
+  { e: '🧭', t: 'Brainstorm your way out', d: 'What would you do to fix it?' },
+  { e: '✨', t: 'Picture the life you want', d: "Imagine it like it's already yours." },
 ];
 export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: boolean }) {
   return (
     <SocReveal
-      title={<>Start with your <LovAccent>Comeback Song</LovAccent>.</>}
+      title={<>Let&apos;s start by making a <LovAccent>Comeback Song</LovAccent>.</>}
       visual={
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 340 }}>
           {COMEBACK_STEPS.map((s, i) => (
@@ -1922,7 +1920,7 @@ export function V3_ComebackMethod({ onNext, onBack, web }: NavProps & { web?: bo
         </div>
       }
       web={web}
-      body={<>It&apos;s the most effective first song — we turn all three into your anthem, and you press play every morning.</>}
+      body={<>We turn it into your anthem — and you press play every morning.</>}
       cta="Show me how it works"
       onNext={onNext}
       onBack={onBack}
