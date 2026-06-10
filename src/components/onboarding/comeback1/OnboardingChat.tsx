@@ -265,15 +265,19 @@ async function suggestIdeas(body: { kind: 'actions' | 'dreams'; pain: string; ac
 
 const clip = (s: unknown) => String(s ?? '').trim().slice(0, 60);
 
-/** Concrete, doable action ideas for THEIR situation, grouped in categories. */
-async function suggestActionSections(pain: string): Promise<IdeaSection[]> {
-  const j = (await suggestIdeas({ kind: 'actions', pain })) as { categories?: { title?: string; ideas?: unknown[] }[] };
+/** Personalized reflection (the "I heard you" ack) + concrete action ideas
+ *  for THEIR situation, grouped in categories named after their struggles. */
+async function suggestActionSections(pain: string): Promise<{ reflection: string; sections: IdeaSection[] }> {
+  const j = (await suggestIdeas({ kind: 'actions', pain })) as {
+    reflection?: string;
+    categories?: { title?: string; ideas?: unknown[] }[];
+  };
   const sections = (j.categories || [])
     .slice(0, 3)
     .map((c) => ({ title: clip(c.title), ideas: (c.ideas || []).map(clip).filter(Boolean).slice(0, 4) }))
     .filter((c) => c.ideas.length);
   if (!sections.length) throw new Error('empty categories');
-  return sections;
+  return { reflection: String(j.reflection || '').trim().slice(0, 400), sections };
 }
 
 /** Vivid best-case-scenario moments, specific to their pain + their plan. */
@@ -495,16 +499,25 @@ export function V3_Chat({
     } else if (phase === 'pain') {
       data.current.pain = value;
       data.current.why = value; // legacy mapping for parent plumbing/analytics
-      // Pre-warm the personalized action ideas while they read the ack.
-      if (!actionReqRef.current) {
-        actionReqRef.current = true;
-        suggestActionSections(value).then(setActionIdeas).catch(() => { /* fallback bank covers it */ });
-      }
       setPhase('actions');
-      botSay([
-        `I hear you, ${name}. And here's the truth — that's not who you are. Somewhere along the way, you lost the real you. Let's go get them back.`,
-        `Step 2 — the way out. If someone you love was stuck exactly where you are, what would you tell them to DO to climb out?`,
-      ], 'text');
+      // The ack must prove we HEARD them — so it's AI-written from their exact
+      // words (the same call also brings the personalized action ideas).
+      // Typing dots run while it thinks; if it's slow/fails we ack claim-safe.
+      actionReqRef.current = true;
+      const req = suggestActionSections(value)
+        .then((r) => { setActionIdeas(r.sections); return r; })
+        .catch(() => null);
+      setMode('busy');
+      const tid = nid();
+      setMsgs((m) => [...m, { id: tid, role: 'bot', kind: 'typing' }]);
+      const timeout = new Promise<null>((res) => { window.setTimeout(() => res(null), 9000); });
+      Promise.race([req, timeout]).then((r) => {
+        setMsgs((m) => m.filter((x) => x.id !== tid));
+        botSay([
+          (r && r.reflection) || `Thank you for being real with me, ${name}. Getting it all out is the first step — now we find the way out.`,
+          `So let's brainstorm: if the best version of you took over tomorrow morning, what would they DO — day by day — to climb out of this? Type whatever comes to mind.`,
+        ], 'text');
+      });
     } else if (phase === 'actions') {
       data.current.actions = value;
       data.current.detail = value; // legacy mapping
@@ -516,7 +529,7 @@ export function V3_Chat({
       setPhase('dream');
       botSay([
         `That's the comeback plan — you already know the way back. 💪 Your song is going to plant it in your mind, every time you press play.`,
-        `Step 3 — the life you're walking into. Imagine every bit of that pain is gone. What's the most amazing life you can picture, ${name}?`,
+        `Now imagine it worked — all of it. What's the most amazing life you can picture, ${name}? What does it feel like?`,
       ], 'text');
     } else if (phase === 'dream') {
       data.current.dream = value;
@@ -724,6 +737,13 @@ export function V3_Chat({
     setPhase('name');
     setDraft('');
     setShowIdeas(false);
+    setSelectedIdeas([]);
+    // Clear the AI-personalized ideas + their request guards — otherwise a
+    // replay shows the PREVIOUS run's suggestions for the new run's answers.
+    setActionIdeas(null);
+    setDreamIdeas(null);
+    actionReqRef.current = false;
+    dreamReqRef.current = false;
     setVibes([]);
     setRevealed(false);
     setStagedFaces([]);

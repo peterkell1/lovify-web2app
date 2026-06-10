@@ -37,10 +37,13 @@ Deno.serve(async (req) => {
     const isActions = kind !== "dreams";
 
     const systemPrompt = isActions
-      ? `You help people who are turning their lives around brainstorm concrete next steps.
-Given what is hurting in someone's life (their own words), suggest realistic, doable actions THEY could take to climb out — specific to what they said, not generic self-help.
-Group them into exactly 3 categories with short, punchy titles (2-4 words). 3 ideas per category.
-Each idea: first person, starts with a verb, max 7 words, concrete enough to picture doing it.`
+      ? `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just vented what hurts.
+
+Reply with two things:
+
+1. reflection — 1-2 short sentences that prove you truly HEARD them: mirror their specific situation back with warmth, in plain conversational language. No platitudes, no diagnoses, no claims about who they are that their words don't support. End by pointing forward (their comeback starts now).
+
+2. categories — exactly 3 brainstorm categories of what THE BEST VERSION OF THEM would be doing every day to climb out of the specific things they named. Name each category after one of THEIR actual struggles (2-4 punchy words — e.g. relationship pain → "Rebuild the spark"). 3 actions per category: first person, verb-first, max 7 words, concrete enough to start today, and clearly connected to what they said — never generic self-help filler. Cover every distinct pain they mentioned.`
       : `You help people who are turning their lives around imagine their best-case future.
 Given what is hurting in someone's life and the action plan they came up with (their own words), suggest vivid best-case-scenario MOMENTS of their future life — like scenes from a mind-movie, specific to them, not generic.
 Each moment: first person, present tense, max 8 words, emotionally vivid.`;
@@ -52,19 +55,23 @@ Each moment: first person, present tense, max 8 words, emotionally vivid.`;
     const tool = isActions
       ? {
           name: "suggest_actions",
-          description: "Suggest 3 categories of concrete comeback actions, 3 ideas each",
+          description: "Reflect what was heard, then suggest 3 categories of concrete comeback actions, 3 ideas each",
           input_schema: {
             type: "object",
             properties: {
+              reflection: {
+                type: "string",
+                description: "1-2 warm conversational sentences mirroring their specific situation, ending pointed forward. No platitudes.",
+              },
               categories: {
                 type: "array",
                 items: {
                   type: "object",
                   properties: {
-                    title: { type: "string", description: "Short category title (2-4 words)" },
+                    title: { type: "string", description: "Category named after one of THEIR struggles (2-4 punchy words)" },
                     ideas: {
                       type: "array",
-                      items: { type: "string", description: "First person, starts with a verb, max 7 words" },
+                      items: { type: "string", description: "First person, starts with a verb, max 7 words, tied to what they said" },
                       minItems: 3,
                       maxItems: 3,
                     },
@@ -76,7 +83,7 @@ Each moment: first person, present tense, max 8 words, emotionally vivid.`;
                 maxItems: 3,
               },
             },
-            required: ["categories"],
+            required: ["reflection", "categories"],
             additionalProperties: false,
           },
         }
