@@ -17,7 +17,10 @@ import {
   V3_11_LeanedOn, V3_Genres,
   V3_MakeSong,
 } from './screens';
-import { V3_Chat, type ChatPersist } from './OnboardingChat';
+import { V3_Chat } from './OnboardingChat';
+import {
+  generateVisionWithFace, buildVisionPrompt, startSong, pollSong, type GeneratedSong,
+} from '@/components/onboarding/v3/generation';
 import { V3_22_Trial, V3_TrialOffer, V3_TrialReminder, V3_TrialPrice, V3_23_Paywall, V3_CreateAccount } from './screens';
 import { StartSuccessView } from '@/components/funnel/StartSuccessPage';
 import { PaymentSheet } from '@/components/onboarding/v3/PaymentSheet';
@@ -72,39 +75,46 @@ function WPaywallPlans() {
     </div>
   );
 }
+// The song chat — LIVE end-to-end in the canvas, exactly like /comeback1:
+// picking the vision pre-warms the image in the background, and confirming
+// the lyrics starts the real Mureka song, so the inline reveal actually
+// completes here too (previously this frame had noop wiring, which made the
+// reveal sit on "Creating your song…" forever during canvas testing).
 function WChat() {
-  return <V3_Chat web genres={['Pop', 'R&B', 'Soul']} onPhoto={noop} onComplete={noop} onBack={noop} />;
-}
-// The song chat in its finished, REVEALED state so the canvas shows the
-// inline "wow moment" (vision + two songs + Save) that replaced the old
-// separate reveal screen.
-const REVEAL_PERSIST: ChatPersist = {
-  msgs: [
-    { id: 'm1', role: 'bot', kind: 'text', text: "Here's your song — this is what we'll plant in your mind. 🧠" },
-    { id: 'm2', role: 'user', kind: 'text', text: 'Make my song 🎶' },
-    { id: 'm3', role: 'bot', kind: 'text', text: "Let's make it real. 🎶" },
-  ],
-  phase: 'generating', mode: 'busy', vibes: [],
-  data: {
-    name: 'Alex', songAbout: 'Who I want to be', detail: '', scene: '', why: '',
-    soundStyle: 'Empowering Pop Anthem', voice: 'Female voice',
-    face: null, faces: [], visionScene: '', lyrics: '', title: 'Palace at Golden Hour',
-  },
-  nextId: 4, done: true,
-};
-function WChatReveal() {
+  const [visionUrl, setVisionUrl] = useState<string | null>(null);
+  const [visionState, setVisionState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle');
+  const [song, setSong] = useState<GeneratedSong | null>(null);
+  const [songState, setSongState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle');
+  const [statusLine, setStatusLine] = useState('Composing your melody…');
   return (
     <V3_Chat
       web
-      genres={['Pop']}
-      persisted={REVEAL_PERSIST}
-      onPhoto={noop}
-      onComplete={noop}
-      visionUrl={null}
-      visionState="failed"
-      song={{ title: 'Palace at Golden Hour', audio_url: 'preview' }}
-      songState="done"
-      songStatusLine=""
+      genres={['Pop', 'R&B', 'Soul']}
+      onPhoto={(face, ctx) => {
+        setVisionState('working');
+        const prompt = buildVisionPrompt({
+          songAbout: ctx.songAbout,
+          scene: ctx.visionScene || ctx.scene,
+          detailText: ctx.detail,
+        });
+        generateVisionWithFace(prompt, face, ctx.songAbout || 'Your Vision', '9:16')
+          .then((u) => { setVisionUrl(u); setVisionState('done'); })
+          .catch(() => setVisionState('failed'));
+      }}
+      onComplete={(r) => {
+        setSongState('working');
+        startSong({ lyrics: r.lyrics, title: r.title, style: r.soundStyle, voice: r.voice })
+          .then((tid) => pollSong(tid, (s) => {
+            setStatusLine(s === 'tuning' ? 'Tuning every word to you…' : s === 'streaming' ? 'Almost ready…' : 'Composing your melody…');
+          }))
+          .then((finished) => { setSong(finished); setSongState('done'); })
+          .catch(() => setSongState('failed'));
+      }}
+      visionUrl={visionUrl}
+      visionState={visionState}
+      song={song}
+      songState={songState}
+      songStatusLine={statusLine}
       onSave={noop}
       onBack={noop}
     />
@@ -147,18 +157,17 @@ const SCREENS: { id: string; label: string; node: ReactNode }[] = [
   { id: '21', label: '21 · Favorite genres', node: <WGenres /> },
   { id: '22', label: '22 · Make your first song', node: <V3_MakeSong onNext={noop} onBack={noop} /> },
   // ── Song chat (intro) + the inline reveal it now ends with ──
-  { id: '23', label: '23 · Song chat (personalized)', node: <WChat /> },
-  { id: '24', label: '24 · Song chat → your song (reveal)', node: <WChatReveal /> },
+  { id: '23', label: '23 · Song chat (LIVE — makes a real song)', node: <WChat /> },
   // ── Paywall ──
-  { id: '25', label: '25 · Paywall: get full access', node: <V3_22_Trial onNext={noop} onBack={noop} /> },
-  { id: '26', label: '26 · Paywall: $1 first week', node: <V3_TrialOffer onNext={noop} onBack={noop} /> },
-  { id: '27', label: '27 · Paywall: we’ll remind you', node: <V3_TrialReminder onNext={noop} onBack={noop} /> },
-  { id: '28', label: '28 · Paywall: $1 first week (price) · tap to test 💳', node: <WTrialPrice /> },
-  { id: '29', label: '29 · Paywall: choose your plan · tap to test 💳', node: <WPaywallPlans /> },
+  { id: '24', label: '24 · Paywall: get full access', node: <V3_22_Trial onNext={noop} onBack={noop} /> },
+  { id: '25', label: '25 · Paywall: $1 first week', node: <V3_TrialOffer onNext={noop} onBack={noop} /> },
+  { id: '26', label: '26 · Paywall: we’ll remind you', node: <V3_TrialReminder onNext={noop} onBack={noop} /> },
+  { id: '27', label: '27 · Paywall: $1 first week (price) · tap to test 💳', node: <WTrialPrice /> },
+  { id: '28', label: '28 · Paywall: choose your plan · tap to test 💳', node: <WPaywallPlans /> },
   // ── Required account creation (song gets saved), then into the app ──
-  { id: '30', label: '30 · Create a Lovify account', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
+  { id: '29', label: '29 · Create a Lovify account', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
   // ── Web funnel only: after account → download page (/start/success) ──
-  { id: '31', label: '31 · Download the app (web funnel)', node: <StartSuccessView /> },
+  { id: '30', label: '30 · Download the app (web funnel)', node: <StartSuccessView /> },
 ];
 
 const FRAME_W = 340;
