@@ -1152,7 +1152,7 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
   { who: 'user', reply: "Waking up excited for my day" },
   { who: 'user', reply: "Proud of what I see in the mirror" },
   { who: 'user', reply: "My family saying I seem happier ✨" },
-  { who: 'bot', text: "That's where we're going. Step 3 — here are the traits and daily moves of the woman who lives that life. Pick your favorites:" },
+  { who: 'bot', text: "That's where we're going. Step 3 — build the comeback version of you, like creating your character 🎮 Pick her traits and daily moves:" },
   { who: 'user', reply: "Wake up early. Make time for herself." },
   { who: 'user', reply: "Get her body moving again" },
   { who: 'user', reply: "Plan the life she actually wants" },

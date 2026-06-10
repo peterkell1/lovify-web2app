@@ -83,8 +83,8 @@ export interface IdeaSection { title?: string; ideas: string[] }
 // Q3 fallback — the best-version-of-you picker: character traits + consistent
 // daily actions (the AI personalizes both from their pain + dream).
 const FALLBACK_ACTION_SECTIONS: IdeaSection[] = [
-  { title: 'Character traits', ideas: ['Disciplined', 'Calm under pressure', 'Full of energy', 'Proud of myself', 'Consistent'] },
-  { title: 'Daily actions', ideas: ['Wake up before my alarm', 'Train every morning', 'Plan my week on Sundays', 'Eat like I respect myself', 'Show up for the people I love'] },
+  { title: 'Character traits', ideas: ['Unshakeable', 'Disciplined as hell', 'Magnetic', 'Fearless', 'Calm under pressure', 'Full of life', 'Relentless', 'Big-hearted', 'Sharp & focused', 'Playful'] },
+  { title: 'Daily actions', ideas: ['Wake up before my alarm', 'Train every morning', 'Plan my week on Sundays', 'Eat like I respect myself', 'Show up for the people I love', 'Protect my evenings'] },
 ];
 // Q3 fallback — best-case-scenario moments.
 const FALLBACK_DREAM_IDEAS: IdeaSection[] = [
@@ -282,8 +282,8 @@ async function suggestActionSections(pain: string, dream: string): Promise<IdeaS
     traits?: unknown[];
     actions?: unknown[];
   };
-  const traits = (j.traits || []).map(clip).filter(Boolean).slice(0, 6);
-  const acts = (j.actions || []).map(clip).filter(Boolean).slice(0, 6);
+  const traits = (j.traits || []).map(clip).filter(Boolean).slice(0, 12);
+  const acts = (j.actions || []).map(clip).filter(Boolean).slice(0, 7);
   const sections: IdeaSection[] = [];
   if (traits.length) sections.push({ title: 'Character traits', ideas: traits });
   if (acts.length) sections.push({ title: 'Daily actions', ideas: acts });
@@ -516,7 +516,11 @@ export function V3_Chat({
   // wish moment belongs to the user's own words first; the AI list is a hand
   // for whoever needs one, not the default.
   const [showDreamIdeas, setShowDreamIdeas] = useState(false);
-  useEffect(() => { setShowDreamIdeas(false); }, [phase]);
+  // Character-creator traits: the AI sends a pool of ~10; we show 5 at a time
+  // (selected ones stay pinned) with a "↻ More traits" flipper — like browsing
+  // options while customizing a game character.
+  const [traitPage, setTraitPage] = useState(0);
+  useEffect(() => { setShowDreamIdeas(false); setTraitPage(0); }, [phase]);
 
   // ── Text answers (name / pain / actions / dream) ──
   // Accepts an explicit value so tapped "Help me…" ideas can move forward too.
@@ -574,8 +578,8 @@ export function V3_Chat({
       setPhase('actions');
       botSay([
         `Now THAT's a life worth fighting for. 🔥`,
-        `We've identified the traits and daily actions of the ${name} who already lives that life.`,
-        `Pick your 4 favorites below — and/or type your own 👇`,
+        `Time to build the comeback version of you — like creating your character 🎮`,
+        `Pick the traits and daily moves you want to run on — and/or type your own 👇`,
       ], 'text');
     } else if (phase === 'actions') {
       data.current.actions = value;
@@ -797,6 +801,7 @@ export function V3_Chat({
     setVisionIdeas(null);
     setIdeasTimedOut(false);
     setShowDreamIdeas(false);
+    setTraitPage(0);
     actionReqRef.current = false;
     dreamReqRef.current = false;
     visionReqRef.current = false;
@@ -914,39 +919,70 @@ export function V3_Chat({
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}
             >
-              {currentIdeaSections().map((sec, si) => (
-                <div key={sec.title || si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {sec.title && (
-                    <div style={{ fontFamily: SANS, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.subSoft, padding: '4px 2px 0' }}>
-                      {sec.title}
-                    </div>
-                  )}
-                  {/* Light wrap of pill chips — scannable, not a wall of rows. */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {sec.ideas.map((idea) => {
-                      const sel = web && selectedIdeas.includes(idea);
-                      return (
+              {currentIdeaSections().map((sec, si) => {
+                // Traits page like a character creator: selected stay pinned,
+                // the rest rotate 5-at-a-time via the "↻ More traits" flipper.
+                const isTraits = /trait/i.test(sec.title || '');
+                const PAGE = 5;
+                let visible = sec.ideas;
+                let canPage = false;
+                if (isTraits && sec.ideas.length > PAGE) {
+                  const sel = sec.ideas.filter((i) => selectedIdeas.includes(i));
+                  const unsel = sec.ideas.filter((i) => !selectedIdeas.includes(i));
+                  const room = Math.max(PAGE - sel.length, 2);
+                  const start = unsel.length ? (traitPage * room) % unsel.length : 0;
+                  const windowed = unsel.slice(start, start + room);
+                  if (windowed.length < room) windowed.push(...unsel.slice(0, room - windowed.length));
+                  visible = [...sel, ...windowed.filter((i, idx, a) => a.indexOf(i) === idx)];
+                  canPage = unsel.length > room;
+                }
+                return (
+                  <div key={sec.title || si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {sec.title && (
+                      <div style={{ fontFamily: SANS, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.subSoft, padding: '4px 2px 0' }}>
+                        {sec.title}
+                      </div>
+                    )}
+                    {/* Light wrap of pill chips — scannable, not a wall of rows. */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {visible.map((idea) => {
+                        const sel = web && selectedIdeas.includes(idea);
+                        return (
+                          <button
+                            key={idea}
+                            onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
+                            style={{
+                              textAlign: 'left', cursor: 'pointer',
+                              padding: '9px 13px', borderRadius: 999,
+                              background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
+                              border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
+                              fontFamily: SANS, fontSize: 13.5, lineHeight: 1.35, color: LOVIFY.ink, fontWeight: sel ? 700 : 500,
+                              display: 'inline-flex', gap: 6, alignItems: 'center',
+                              boxShadow: '0 4px 12px -8px rgba(216,92,28,0.4)',
+                            }}
+                          >
+                            <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
+                            <span>{idea}</span>
+                          </button>
+                        );
+                      })}
+                      {canPage && (
                         <button
-                          key={idea}
-                          onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
+                          onClick={() => setTraitPage((p) => p + 1)}
                           style={{
-                            textAlign: 'left', cursor: 'pointer',
-                            padding: '9px 13px', borderRadius: 999,
-                            background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
-                            border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
-                            fontFamily: SANS, fontSize: 13.5, lineHeight: 1.35, color: LOVIFY.ink, fontWeight: sel ? 700 : 500,
+                            cursor: 'pointer', padding: '9px 13px', borderRadius: 999,
+                            background: 'transparent', border: `1.5px dashed ${LOVIFY.orange}`,
+                            fontFamily: SANS, fontSize: 13.5, fontWeight: 700, color: LOVIFY.orangeDeep,
                             display: 'inline-flex', gap: 6, alignItems: 'center',
-                            boxShadow: '0 4px 12px -8px rgba(216,92,28,0.4)',
                           }}
                         >
-                          <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
-                          <span>{idea}</span>
+                          ↻ More traits
                         </button>
-                      );
-                    })}
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {web && selectedIdeas.length > 0 && (
                 <div style={{ alignSelf: 'flex-start', padding: '2px 4px 0', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
                   {selectedIdeas.length} selected — add your own below, then tap ↑

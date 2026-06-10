@@ -42,10 +42,10 @@ Given what hurts, their action plan, and their dream (their own words), create 4
 For each: a single fitting emoji; a short user-facing title (max 7 words, first person feel, e.g. "Date night, laughing like we used to"); and an image-generation prompt written as "as myself …" describing them in that scene — photorealistic, cinematic, warm golden light, emotionally specific.`;
 
     const systemPrompt = isVisions ? visionsSystemPrompt : isActions
-      ? `You help people see the version of themselves who ALREADY lives their dream life.
+      ? `You help people BUILD the version of themselves who already lives their dream life — like creating a character they would love to play.
 Given what hurts now and the dream they want (their own words), describe that best version of them:
-1. traits — 5 short personality/character traits that version embodies (1-3 words each, e.g. "Calm under pressure", "Disciplined", "Playful with her") — specific to their situation, never generic filler.
-2. actions — 5 things that version does on a consistent basis (verb-first, max 7 words, concrete enough to picture, tied directly to the pains and dreams they named).`
+1. traits — 10 short ADMIRABLE character traits, named like hero perks someone would aspire to ("I wish I was like that"): 1-3 words each, e.g. "Unshakeable", "Magnetic", "Disciplined as hell", "Calm under pressure", "Fearless", "Big-hearted". Tailor them to their situation, but ALWAYS aspirational and admirable — never clinical or judgey (BAD: "Money-focused", "Status-driven").
+2. actions — 6 things that version does on a consistent basis (verb-first, max 7 words, concrete enough to picture, tied directly to the pains and dreams they named).`
       : `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just vented what hurts.
 
 Reply with two things:
@@ -98,15 +98,15 @@ Reply with two things:
             properties: {
               traits: {
                 type: "array",
-                items: { type: "string", description: "Short personality/character trait, 1-3 words, specific to their situation" },
-                minItems: 5,
-                maxItems: 5,
+                items: { type: "string", description: "Admirable hero-perk trait, 1-3 words, aspirational, tailored to their situation" },
+                minItems: 10,
+                maxItems: 10,
               },
               actions: {
                 type: "array",
                 items: { type: "string", description: "Verb-first consistent action, max 7 words, tied to what they said" },
-                minItems: 5,
-                maxItems: 5,
+                minItems: 6,
+                maxItems: 6,
               },
             },
             required: ["traits", "actions"],
