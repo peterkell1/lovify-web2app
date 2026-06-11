@@ -22,6 +22,7 @@ import {
   suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe,
 } from '@/components/onboarding/v3/generation';
 import type { GeneratedSong } from '@/components/onboarding/v3/generation';
+import { publicEnv } from '@/lib/env';
 
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
 
@@ -61,6 +62,28 @@ export interface ChatResult {
 // One journey for everyone: dream-or-vent → specific scenes → identity
 // statements. The interview's job is pulling out raw material — exact phrases,
 // specific scenes, "I am ___" lines — that the lyric step reorganizes.
+
+// ── AI positive-flip (Q1 → Q2) ────────────────────────────────────
+// Whatever they share in Q1 — a vent or a dream — the deployed
+// suggest-comeback-ideas function (dreams mode) returns a warm reflection
+// that proves we HEARD them plus 6 vivid positive future-moments built from
+// their words. A vent comes back FLIPPED: the new life, never the problem.
+async function suggestFlippedDreams(text: string): Promise<{ reflection: string; ideas: string[] }> {
+  const res = await fetch(`${publicEnv.supabaseUrl}/functions/v1/suggest-comeback-ideas`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${publicEnv.supabaseAnonKey}`,
+      apikey: publicEnv.supabaseAnonKey,
+    },
+    body: JSON.stringify({ kind: 'dreams', pain: text }),
+  });
+  if (!res.ok) throw new Error(`suggest ${res.status}`);
+  const j = await res.json();
+  const ideas = (j.ideas || []).map((x: unknown) => String(x ?? '').trim().slice(0, 60)).filter(Boolean).slice(0, 7);
+  if (!ideas.length) throw new Error('empty ideas');
+  return { reflection: String(j.reflection || '').trim().slice(0, 400), ideas };
+}
 
 // ── "Help me imagine" banks (Q2 scenes / Q3 identity only — Q1 is a free
 // vent/dream; we want their own words first).
@@ -128,6 +151,11 @@ const SOUND_LOADING_LINES = [
   'Listening to your story…',
   'Matching sounds to your story…',
   'Tuning the energy…',
+];
+const IDEA_LOADING_LINES = [
+  'Flipping it into the life you love…',
+  'Reading what you wrote…',
+  'Picturing your best-case moments…',
 ];
 const WRITING_LINES = [
   'Studying who you want to become…',
@@ -269,6 +297,17 @@ export function V3_Chat({
   const [showIdeas, setShowIdeas] = useState(false);
   // Web "Help me imagine" is multi-select: tap several short ideas, then Continue.
   const [selectedIdeas, setSelectedIdeas] = useState<string[]>([]);
+  // AI positive-flips of their Q1 answer (pre-warmed; static bank until then).
+  const [flipIdeas, setFlipIdeas] = useState<string[] | null>(null);
+  const flipReqRef = useRef(false);
+  const [flipTimedOut, setFlipTimedOut] = useState(false);
+  useEffect(() => {
+    if (phase !== 'scene' || flipIdeas) return;
+    setFlipTimedOut(false);
+    const t = window.setTimeout(() => setFlipTimedOut(true), 9000);
+    return () => window.clearTimeout(t);
+  }, [phase, flipIdeas]);
+  const flipPending = phase === 'scene' && !flipIdeas && !flipTimedOut && flipReqRef.current;
   const toggleIdea = (idea: string) =>
     setSelectedIdeas((s) => (s.includes(idea) ? s.filter((x) => x !== idea) : [...s, idea]));
   const [vibes, setVibes] = useState<SoundVibe[]>(() => persisted?.vibes ?? []);
@@ -382,7 +421,7 @@ export function V3_Chat({
 
   // Ideas to show under "Help me imagine" for the current question.
   const currentIdeas = (): string[] => {
-    if (phase === 'scene') return web ? SCENE_IDEAS_WEB : SCENE_IDEAS;
+    if (phase === 'scene') return flipIdeas ?? (web ? SCENE_IDEAS_WEB : SCENE_IDEAS);
     if (phase === 'why') return web ? WHY_IDEAS_WEB : WHY_IDEAS;
     return [];
   };
@@ -407,14 +446,26 @@ export function V3_Chat({
         `Do you already have a vision of your dream — or is something bothering you right now? Either way, tell me everything.`,
       ], 'text');
     } else if (phase === 'detail') {
-      // Q1 answer: a dream OR a vent. A vent tells us exactly what the dream
-      // is — the opposite of the problem (the lyrics prompt encodes this).
+      // Q1 answer: a dream OR a vent. Either way the AI flips it into
+      // positive future-moments they can tap — a vent comes back as the new
+      // life (the opposite of the problem), never the problem itself.
       data.current.detail = value;
       setPhase('scene');
-      botSay([
-        `Thank you for sharing that, ${name} — that's exactly what your song is made of. 🔥`,
-        `Now dream BIG with me. Picture the wildest, best version of your life — what's actually happening? Give me the specific scenes: where you are, what you're doing, who's there, what people are saying.`,
-      ], 'text');
+      flipReqRef.current = true;
+      const req = suggestFlippedDreams(value)
+        .then((r) => { setFlipIdeas(r.ideas); return r; })
+        .catch(() => null);
+      setMode('busy');
+      const tid = nid();
+      setMsgs((m) => [...m, { id: tid, role: 'bot', kind: 'typing' }]);
+      const timeout = new Promise<null>((res) => { window.setTimeout(() => res(null), 9000); });
+      Promise.race([req, timeout]).then((r) => {
+        setMsgs((m) => m.filter((x) => x.id !== tid));
+        botSay([
+          (r && r.reflection) || `Thank you for sharing that, ${name} — that's exactly what your song is made of. 🔥`,
+          `Lovify is here to help you change this. Which of these would be part of a new life you LOVE? Tap a few below — and add your own specifics: where you are, who's there, what people are saying 👇`,
+        ], 'text');
+      });
     } else if (phase === 'scene') {
       data.current.scene = value;
       setPhase('why');
@@ -582,8 +633,12 @@ export function V3_Chat({
   // user has typed something, send that; otherwise submit their selected ideas.
   const sendActive = () => !!draft.trim() || selectedIdeas.length > 0;
   const sendOrContinue = () => {
-    if (draft.trim()) { submitFreeText(); return; }
-    if (selectedIdeas.length) submitText(selectedIdeas.join(', '));
+    const typed = draft.trim();
+    if (mode === 'text' && selectedIdeas.length) {
+      submitText([...selectedIdeas, typed].filter(Boolean).join('. '));
+      return;
+    }
+    if (typed) submitFreeText();
   };
 
   // Steps where the bottom text bar is live. Chip steps (about/sound/voice/
@@ -635,6 +690,9 @@ export function V3_Chat({
     idRef.current = 0;
     doneRef.current = false;
     recoveredRef.current = false;
+    setFlipIdeas(null);
+    setFlipTimedOut(false);
+    flipReqRef.current = false;
     onPersist?.({ msgs: [], phase: 'name', mode: 'busy', vibes: [], data: { ...data.current }, nextId: 0, done: false });
     botSay(
       [
@@ -709,8 +767,13 @@ export function V3_Chat({
         {/* "Help me imagine" lives right under the AI's question — a gentle hand
             for anyone who's stuck or low. Left-aligned like a bot affordance so
             it reads as part of the assistant's message. Hidden on the name step. */}
-        {mode === 'text' && phase !== 'name' && (
-          showIdeas ? (
+        {mode === 'text' && phase === 'scene' && flipPending && (
+          <div style={{ alignSelf: 'flex-start' }}>
+            <LoaderLine lines={IDEA_LOADING_LINES} />
+          </div>
+        )}
+        {mode === 'text' && phase !== 'name' && currentIdeas().length > 0 && !(phase === 'scene' && flipPending) && (
+          (showIdeas || phase === 'scene') ? (
             <motion.div
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}
