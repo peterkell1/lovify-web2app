@@ -13,7 +13,7 @@ const appStoreBadge = '/assets/app-store-badge.svg';
  * stripe-webhook from the paid session (Phase 2); this page just celebrates
  * and points the user to download the app, where their trial is already live.
  */
-const APP_STORE_URL = 'https://apps.apple.com/app/lovify'; // TODO: real App Store id
+const APP_STORE_URL = 'https://apps.apple.com/us/app/lovify-music-for-your-mind/id6759404327';
 
 // Presentational only — no analytics side-effects, so it's safe to render in
 // the all-screens canvas. The route wrapper below fires the pixel/PostHog.
