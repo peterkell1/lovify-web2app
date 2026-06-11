@@ -20,7 +20,16 @@ import { Capacitor } from '@/lib/stubs/capacitor';
  *    not a replacement.
  */
 
-const POSTHOG_API_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY as string | undefined;
+// Default to the Lovify PostHog project token (project 404083). A project
+// API key is public — it ships in the client bundle by design — same
+// rationale as the hard-coded pixel id in metaPixel.ts. The env var can
+// override it, but only if it looks like a real token (must start with
+// "phc_"): this guards against a mis-pasted value silently killing all
+// funnel analytics.
+const envKey = process.env.NEXT_PUBLIC_POSTHOG_KEY as string | undefined;
+const POSTHOG_API_KEY = envKey && envKey.startsWith('phc_')
+  ? envKey
+  : 'phc_w3fH3wpyo7c98S8iCe4e3mvWJeemBWcPn2WnNnwF7XyH';
 const POSTHOG_HOST = (process.env.NEXT_PUBLIC_POSTHOG_HOST as string | undefined) ?? 'https://us.i.posthog.com';
 
 let initialized = false;
@@ -36,9 +45,10 @@ export function initPostHog(): void {
   try {
     posthog.init(POSTHOG_API_KEY, {
       api_host: POSTHOG_HOST,
-      // Don't create a Person for anonymous sessions — only after the user
-      // signs in and we call identify(). Keeps the persons table clean.
-      person_profiles: 'identified_only',
+      // Web funnel: most visitors never sign in (they buy via the off-domain
+      // RC checkout), so person profiles must exist for ANONYMOUS sessions or
+      // ad-attribution breakdowns lose the people who matter most.
+      person_profiles: 'always',
       // We capture explicit screen events for funnel analysis. Disabling
       // autocapture avoids polluting the funnel with ambient click events.
       autocapture: false,
@@ -61,6 +71,27 @@ export function initPostHog(): void {
     console.log('[PostHog] Initialized');
   } catch (err) {
     console.error('[PostHog] Init failed:', err);
+  }
+}
+
+/**
+ * Register ad-click attribution (fbclid + utm_*) as super-properties so EVERY
+ * event this session can be sliced by campaign/adset/ad in PostHog funnels
+ * (utm_campaign = Meta campaign, utm_term = adset, utm_content = ad name).
+ * Only sets params actually present in the URL — register() persists for the
+ * session, and later pages (e.g. /start/success) have no utm params, so
+ * registering nulls there would clobber the landing attribution.
+ */
+export function registerAdAttribution(): void {
+  if (!initialized || typeof window === 'undefined') return;
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const keys = ['fbclid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+    const props: Record<string, string> = {};
+    for (const k of keys) { const v = p.get(k); if (v) props[k] = v; }
+    if (Object.keys(props).length) posthog.register(props);
+  } catch (err) {
+    console.error('[PostHog] registerAdAttribution failed:', err);
   }
 }
 
