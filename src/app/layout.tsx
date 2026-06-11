@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Montserrat, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
@@ -29,7 +29,19 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   title: "Lovify",
-  description: "Turn your idea into an app.",
+  description: "Your life, your song — Lovify turns your story into music.",
+};
+
+// App-like funnel: lock the zoom level. Without maximumScale, iOS zooms in
+// when an input gets focus and never zooms back out, leaving the chat layout
+// off-center with buttons pushed off-screen (paired with ≥16px input fonts,
+// which stop the auto-zoom trigger itself).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

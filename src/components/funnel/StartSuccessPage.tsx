@@ -27,9 +27,20 @@ export function StartSuccessView() {
         You're in! 🎉
       </h1>
       <p style={{ margin: '14px 0 0', fontFamily: SANS, fontSize: 16.5, lineHeight: 1.5, color: LOVIFY.sub, maxWidth: 380 }}>
-        Your $1 trial is active. <strong style={{ color: LOVIFY.ink }}>Check your email</strong> for a link
-        to set your password, then download Lovify and sign in — your song is waiting.
+        Your $1 trial is active. Three quick steps to your song:
       </p>
+      <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 380, textAlign: 'left' }}>
+        {[
+          ['1', <>Check your <strong style={{ color: LOVIFY.ink }}>email</strong> — tap the link and set your password.</>],
+          ['2', <>Download <strong style={{ color: LOVIFY.ink }}>Lovify</strong> from the App Store below.</>],
+          ['3', <>Log in with your <strong style={{ color: LOVIFY.ink }}>purchase email + password</strong> — your song is waiting. 🎶</>],
+        ].map(([n, body]) => (
+          <div key={n as string} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ width: 26, height: 26, borderRadius: 13, flexShrink: 0, background: LOVIFY.orangeGradient, color: '#fff', fontFamily: SANS, fontSize: 13.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n}</span>
+            <span style={{ fontFamily: SANS, fontSize: 15.5, lineHeight: 1.45, color: LOVIFY.sub, paddingTop: 2 }}>{body}</span>
+          </div>
+        ))}
+      </div>
       <a
         href={APP_STORE_URL}
         aria-label="Download on the App Store"

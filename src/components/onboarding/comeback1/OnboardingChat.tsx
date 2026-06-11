@@ -511,7 +511,7 @@ export function V3_Chat({
         setMsgs((m) => m.filter((x) => x.id !== tid));
         botSay([
           (r && r.reflection) || `Thank you for sharing that, ${name} — that's exactly what your song is made of. 🔥`,
-          `Now we're going to create a song that helps you bring this vision to life. 🎶 Select your favorite things below to help us build a life you love — and add your own specifics: where you are, who's there, what people are saying 👇`,
+          `Now we're going to create a song that helps you bring this vision to life. 🎶 Tell me what's in that life — where you are, who's there, what people are saying. Type it in your own words, or tap ✨ Help me imagine for ideas 👇`,
         ], 'text');
       });
     } else if (phase === 'scene') {
@@ -826,13 +826,17 @@ export function V3_Chat({
         {/* "Help me imagine" lives right under the AI's question — a gentle hand
             for anyone who's stuck or low. Left-aligned like a bot affordance so
             it reads as part of the assistant's message. Hidden on the name step. */}
-        {mode === 'text' && phase === 'scene' && flipPending && (
+        {/* Ideas are hidden by default — most people already know what they
+            want and just type it. "✨ Help me imagine" opens the brainstorm
+            chips for anyone who's stuck (AI ideas keep pre-warming in the
+            background either way, so the open feels instant). */}
+        {mode === 'text' && phase === 'scene' && flipPending && showIdeas && (
           <div style={{ alignSelf: 'flex-start' }}>
             <LoaderLine lines={IDEA_LOADING_LINES} />
           </div>
         )}
-        {mode === 'text' && phase !== 'name' && currentIdeas().length > 0 && !(phase === 'scene' && flipPending) && (
-          (showIdeas || phase === 'scene') ? (
+        {mode === 'text' && phase !== 'name' && (currentIdeas().length > 0 || (phase === 'scene' && flipPending)) && !(flipPending && showIdeas) && (
+          (showIdeas && currentIdeas().length > 0) ? (
             <motion.div
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}
@@ -1013,9 +1017,11 @@ export function V3_Chat({
               autoFocus
               placeholder={textBarPlaceholder}
               style={{
-                flex: 1, boxSizing: 'border-box', padding: '14px 16px', borderRadius: 22,
+                flex: 1, boxSizing: 'border-box', padding: '13px 16px', borderRadius: 22,
                 background: 'rgba(255, 251, 244, 0.9)', border: `1.5px solid ${draft.trim() ? LOVIFY.orange : LOVIFY.line}`,
-                fontFamily: SANS, fontSize: 15, lineHeight: 1.45, color: LOVIFY.ink, outline: 'none',
+                // 16px minimum: anything smaller makes iOS Safari auto-zoom the
+                // page on focus, which knocks the whole layout off-center.
+                fontFamily: SANS, fontSize: 16, lineHeight: 1.45, color: LOVIFY.ink, outline: 'none',
                 resize: 'none', overflowY: 'auto', maxHeight: 124,
               }}
             />
@@ -1056,7 +1062,9 @@ export function V3_Chat({
                 width: '100%', boxSizing: 'border-box', resize: 'none',
                 padding: '14px 16px', borderRadius: 18,
                 background: 'rgba(255, 251, 244, 0.95)', border: `1.5px solid ${LOVIFY.line}`,
-                fontFamily: SANS, fontSize: 14, lineHeight: 1.6, color: LOVIFY.ink, outline: 'none',
+                // 16px minimum — see the chat input: smaller fonts trigger the
+                // iOS focus auto-zoom that breaks the layout.
+                fontFamily: SANS, fontSize: 16, lineHeight: 1.55, color: LOVIFY.ink, outline: 'none',
                 maxHeight: 260,
               }}
             />
@@ -1088,27 +1096,59 @@ function MicButton({ onResult, disabled }: { onResult: (t: string) => void; disa
   const [listening, setListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
+  // True from tap-to-start until tap-to-stop. Recognition engines end on
+  // their own after any pause (and iOS caps sessions at a few seconds), so
+  // onend restarts while this is set — talking keeps working until the user
+  // actually stops it.
+  const keepAliveRef = useRef(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SR = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
-  useEffect(() => () => { try { recRef.current?.stop?.(); } catch { /* ignore */ } }, []);
+  useEffect(() => () => { keepAliveRef.current = false; try { recRef.current?.stop?.(); } catch { /* ignore */ } }, []);
   if (!SR) return null;
   const toggle = () => {
-    if (listening) { try { recRef.current?.stop?.(); } catch { /* ignore */ } setListening(false); return; }
+    if (listening) {
+      keepAliveRef.current = false;
+      try { recRef.current?.stop?.(); } catch { /* ignore */ }
+      setListening(false);
+      return;
+    }
     try {
       const rec = new SR();
-      rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
+      rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = true;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       rec.onresult = (e: any) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const t = Array.from(e.results).map((r: any) => r[0]?.transcript || '').join(' ').trim();
-        if (t) onResult(t);
+        // Only deliver NEW final segments — with continuous+interim results the
+        // event replays the whole session, so joining everything every time
+        // duplicated earlier speech.
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) {
+            const t = (r[0]?.transcript || '').trim();
+            if (t) onResult(t);
+          }
+        }
       };
-      rec.onend = () => setListening(false);
-      rec.onerror = () => setListening(false);
+      rec.onend = () => {
+        if (keepAliveRef.current) {
+          try { rec.start(); return; } catch { /* engine refused — give up */ }
+        }
+        keepAliveRef.current = false;
+        setListening(false);
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rec.onerror = (e: any) => {
+        // Permission errors are fatal; transient ones (no-speech, network)
+        // fall through to onend, which restarts while keep-alive is set.
+        if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed' || e?.error === 'audio-capture') {
+          keepAliveRef.current = false;
+          setListening(false);
+        }
+      };
       recRef.current = rec;
       rec.start();
+      keepAliveRef.current = true;
       setListening(true);
-    } catch { setListening(false); }
+    } catch { keepAliveRef.current = false; setListening(false); }
   };
   return (
     <button
