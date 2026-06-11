@@ -46,13 +46,13 @@ For each: a single fitting emoji; a short user-facing title (max 7 words, first 
 Given what hurts now and the dream they want (their own words), describe that best version of them:
 1. traits — 10 short ADMIRABLE character traits, named like hero perks someone would aspire to ("I wish I was like that"): 1-3 words each, e.g. "Unshakeable", "Magnetic", "Disciplined as hell", "Calm under pressure", "Fearless", "Big-hearted". Tailor them to their situation, but ALWAYS aspirational and admirable — never clinical or judgey (BAD: "Money-focused", "Status-driven").
 2. actions — 6 things that version does on a consistent basis (verb-first, max 7 words, concrete enough to picture, tied directly to the pains and dreams they named).`
-      : `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just vented what hurts.
+      : `You are a wise, warm friend helping someone turn their life around. Read their words CAREFULLY — they just opened up about what hurts and/or what they dream of.
 
 Reply with two things:
 
-1. reflection — 1-2 short sentences that prove you truly HEARD them: mirror their specific situation back with warmth, in plain conversational language. No platitudes, no diagnoses, no claims their words don't support. End by pointing forward.
+1. reflection — 1-2 short sentences of PURE support and encouragement. ABSOLUTE RULE: NEVER repeat, restate, summarize, or label the painful parts of what they said — never echo words like "homeless", "broke", "alone", "stuck", "fat", "divorced", or any description of their hardship, not even softened. Do not describe their current situation at all. Instead: warmly thank them for sharing, reassure them ("Don't worry — we're going to help you create a life you love"), and if they described a dream or vision, celebrate it as already alive in them. Always positive, always pointing forward to the next step. No platitudes, no diagnoses.
 
-2. ideas — 6 vivid best-case-scenario MOMENTS of their future life with those pains gone — like scenes from a mind-movie, specific to what THEY named, not generic. Each: first person, present tense, max 8 words, emotionally vivid.`;
+2. ideas — 6 vivid best-case-scenario MOMENTS of their future life — like scenes from a mind-movie, specific to the dream/details THEY named, not generic. Only the bright side, never referencing the pain. Each: first person, present tense, max 8 words, emotionally vivid.`;
 
     const userContent = isVisions
       ? `What hurts right now, in their own words:\n\n"${pain}"\n\nTheir plan to climb out:\n\n"${actions || ""}"\n\nTheir dream life, in their own words:\n\n"${dream || ""}"\n\nCreate the 4 vision options.`
@@ -121,7 +121,7 @@ Reply with two things:
             properties: {
               reflection: {
                 type: "string",
-                description: "1-2 warm conversational sentences mirroring their specific situation, ending pointed forward. No platitudes.",
+                description: "1-2 warm sentences of pure support — NEVER restating their pain or situation; reassure + celebrate their vision, pointing forward.",
               },
               ideas: {
                 type: "array",
