@@ -28,7 +28,7 @@ import {
 } from '@/components/onboarding/v3/generation';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { capturePostHogEvent } from '@/lib/posthog';
+import { capturePostHogEvent, initPostHog, registerAdAttribution } from '@/lib/posthog';
 import { trackPaywallShown, trackPaywallCompleted } from '@/lib/track';
 import { purchaseViaIAP } from '@/lib/iapFlow';
 import { PaymentSheet } from '@/components/onboarding/v3/PaymentSheet';
@@ -124,12 +124,24 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
   );
   const TOTAL = stepIds.length;
 
-  // ── Meta Pixel boots WITH the funnel (web) ──
-  // Without this, fbq doesn't exist until /start/success: PageView /
-  // ViewContent / Lead silently no-op during the funnel and the _fbp cookie
-  // is never set (degrading the server-side CAPI Purchase match too).
+  // ── Meta Pixel + PostHog boot WITH the funnel (web) ──
+  // Without this, fbq doesn't exist until /start/success (PageView /
+  // ViewContent / Lead silently no-op and the _fbp cookie is never set,
+  // degrading the server-side CAPI Purchase match), and every
+  // capturePostHogEvent() in the funnel no-ops behind initPostHog's guard.
+  // registerAdAttribution stamps fbclid/utm_* on every PostHog event so the
+  // funnel can be broken down per ad; funnel_landed is the campaign-side
+  // anchor event for the conversion funnel.
+  const landedRef = useRef(false);
   useEffect(() => {
-    if (mode === 'web') initMetaPixel();
+    if (mode !== 'web') return;
+    initMetaPixel();
+    initPostHog();
+    registerAdAttribution();
+    if (!landedRef.current) {
+      landedRef.current = true;
+      capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1' });
+    }
   }, [mode]);
 
   // ── Eagerly preload every illustration on mount (web) ──
@@ -231,6 +243,8 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       // Web funnel: the native FB SDK no-ops on web, so fire the browser pixel
       // ViewContent directly for go.trylovify.com ad optimisation.
       trackPixel('ViewContent', { content_name: 'paywall', content_category: 'subscription' });
+      // Canonical funnel-step name the ads dashboard builds its funnel on.
+      capturePostHogEvent('paywall_viewed', { flow: 'onboarding_comeback1', surface });
     }
   }, [step]);
 
@@ -387,6 +401,8 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
     // account yet). On success Stripe sends the user to /start/success.
     if (mode === 'web') {
       capturePostHogEvent('web_checkout_started', { surface: 'web', plan_id: planId });
+      // Canonical funnel-step name the ads dashboard builds its funnel on.
+      capturePostHogEvent('checkout_started', { surface: 'web', plan_id: planId });
       trackPaywallCompleted({ source: 'web_funnel_trial', planId });
       // Lead = strongest on-domain intent we can fire before the off-domain RC
       // checkout (email is entered on pay.rev.cat, which we can't pixel).
@@ -567,6 +583,8 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
         }}
         onNext={async () => {
           capturePostHogEvent('onboarding_account_completed', { flow: 'onboarding_comeback1', surface });
+          // Canonical funnel-step name the ads dashboard builds its funnel on.
+          capturePostHogEvent('account_created', { flow: 'onboarding_comeback1', surface });
           // This path fires only when the account was created in-place (native
           // Apple/email sign-in, which return a session here instead of
           // bouncing the page). Claim the staged song into the new account
