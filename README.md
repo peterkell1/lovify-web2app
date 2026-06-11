@@ -93,3 +93,5 @@ and add a matching page under `src/app/onboarding/<slug>/`.
 | `npm run lint` | ESLint |
 
 <!-- prod env: RC purchase link switched to production token (rebuild trigger) -->
+
+<!-- force clean build: VERCEL_FORCE_NO_BUILD_CACHE — stale prerender cache was serving the old home page -->
