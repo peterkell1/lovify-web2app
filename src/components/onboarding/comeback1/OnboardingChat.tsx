@@ -68,7 +68,7 @@ export interface ChatResult {
 // suggest-comeback-ideas function (dreams mode) returns a warm reflection
 // that proves we HEARD them plus 6 vivid positive future-moments built from
 // their words. A vent comes back FLIPPED: the new life, never the problem.
-async function suggestFlippedDreams(text: string): Promise<{ reflection: string; ideas: string[] }> {
+async function suggestFlippedDreams(text: string, exclude: string[] = []): Promise<{ reflection: string; ideas: string[] }> {
   const res = await fetch(`${publicEnv.supabaseUrl}/functions/v1/suggest-comeback-ideas`, {
     method: 'POST',
     headers: {
@@ -76,7 +76,12 @@ async function suggestFlippedDreams(text: string): Promise<{ reflection: string;
       Authorization: `Bearer ${publicEnv.supabaseAnonKey}`,
       apikey: publicEnv.supabaseAnonKey,
     },
-    body: JSON.stringify({ kind: 'dreams', pain: text }),
+    body: JSON.stringify({
+      kind: 'dreams',
+      pain: exclude.length
+        ? `${text}\n\n(These were already suggested — give 6 COMPLETELY DIFFERENT new moments: ${exclude.join('; ')})`
+        : text,
+    }),
   });
   if (!res.ok) throw new Error(`suggest ${res.status}`);
   const j = await res.json();
@@ -307,6 +312,20 @@ export function V3_Chat({
     return () => window.clearTimeout(t);
   }, [phase, flipIdeas]);
   const flipPending = phase === 'scene' && !flipIdeas && !flipTimedOut && flipReqRef.current;
+  // "↻ More ideas": fetch a fresh AI batch (excluding what's shown) and
+  // append — selections stay; the menu just keeps growing.
+  const [moreLoading, setMoreLoading] = useState(false);
+  const loadMoreIdeas = () => {
+    if (moreLoading) return;
+    setMoreLoading(true);
+    suggestFlippedDreams(data.current.detail, flipIdeas ?? currentIdeas())
+      .then((r) => setFlipIdeas((prev) => {
+        const base = prev ?? currentIdeas();
+        return [...base, ...r.ideas.filter((i) => !base.includes(i))].slice(0, 30);
+      }))
+      .catch(() => { /* keep what we have */ })
+      .finally(() => setMoreLoading(false));
+  };
   const toggleIdea = (idea: string) =>
     setSelectedIdeas((s) => (s.includes(idea) ? s.filter((x) => x !== idea) : [...s, idea]));
   const [vibes, setVibes] = useState<SoundVibe[]>(() => persisted?.vibes ?? []);
@@ -691,6 +710,7 @@ export function V3_Chat({
     recoveredRef.current = false;
     setFlipIdeas(null);
     setFlipTimedOut(false);
+    setMoreLoading(false);
     flipReqRef.current = false;
     onPersist?.({ msgs: [], phase: 'name', mode: 'busy', vibes: [], data: { ...data.current }, nextId: 0, done: false });
     botSay(
@@ -783,27 +803,44 @@ export function V3_Chat({
                 </span>
                 <button onClick={() => { setShowIdeas(false); setSelectedIdeas([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.sub }}>Close</button>
               </div>
-              {currentIdeas().map((idea) => {
-                const sel = web && selectedIdeas.includes(idea);
-                return (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {currentIdeas().map((idea) => {
+                  const sel = web && selectedIdeas.includes(idea);
+                  const pill = phase === 'scene';
+                  return (
+                    <button
+                      key={idea}
+                      onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
+                      style={{
+                        textAlign: 'left', cursor: 'pointer', width: pill ? 'auto' : '100%',
+                        padding: pill ? '9px 13px' : '12px 15px', borderRadius: pill ? 999 : 16,
+                        background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
+                        border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
+                        fontFamily: SANS, fontSize: pill ? 13.5 : 14, lineHeight: 1.35, color: LOVIFY.ink, fontWeight: sel ? 700 : 500,
+                        display: 'inline-flex', gap: 7, alignItems: 'center',
+                        boxShadow: '0 4px 12px -8px rgba(216,92,28,0.4)',
+                      }}
+                    >
+                      <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
+                      <span>{idea}</span>
+                    </button>
+                  );
+                })}
+                {phase === 'scene' && (
                   <button
-                    key={idea}
-                    onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
+                    onClick={loadMoreIdeas}
+                    disabled={moreLoading}
                     style={{
-                      textAlign: 'left', cursor: 'pointer', width: '100%',
-                      padding: '12px 15px', borderRadius: 16,
-                      background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
-                      border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
-                      fontFamily: SANS, fontSize: 14, lineHeight: 1.4, color: LOVIFY.ink, fontWeight: sel ? 700 : 400,
-                      display: 'flex', gap: 9, alignItems: 'center',
-                      boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)',
+                      cursor: moreLoading ? 'default' : 'pointer', padding: '9px 13px', borderRadius: 999,
+                      background: 'transparent', border: `1.5px dashed ${LOVIFY.orange}`,
+                      fontFamily: SANS, fontSize: 13.5, fontWeight: 700, color: LOVIFY.orangeDeep,
+                      display: 'inline-flex', gap: 6, alignItems: 'center', opacity: moreLoading ? 0.6 : 1,
                     }}
                   >
-                    <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
-                    <span>{idea}</span>
+                    {moreLoading ? '↻ Dreaming up more…' : '↻ More ideas'}
                   </button>
-                );
-              })}
+                )}
+              </div>
               {web && selectedIdeas.length > 0 && (
                 <div style={{ alignSelf: 'flex-start', padding: '2px 4px 0', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
                   {selectedIdeas.length} selected — tap ↑ to continue
