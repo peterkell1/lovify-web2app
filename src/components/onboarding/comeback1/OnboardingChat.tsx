@@ -97,12 +97,12 @@ const SCENE_IDEAS = [
 ];
 const SCENE_IDEAS_WEB = SCENE_IDEAS;
 const WHY_IDEAS = [
-  'I am magnetic',
-  'I am unstoppable',
-  'I am a force of nature',
-  'I am the embodiment of love',
-  'I am free',
-  'I am living my purpose',
+  "I've felt small for too long",
+  'My loved ones deserve my best',
+  'To prove to myself I can',
+  "I'm ready to feel alive again",
+  "I've worked so hard for this",
+  'To remember who I really am',
 ];
 const WHY_IDEAS_WEB = WHY_IDEAS;
 
@@ -214,18 +214,17 @@ function fill(t: string, name: string): string {
 // phrases (especially their "I am ___" lines) ARE the material; if Q1 was a
 // vent, the song lives on the OTHER side of the problem and never sings the
 // problem itself.
-function buildDreamLyricsPrompt(a: { name: string; dream: string; scenes: string; identity: string }): string {
+function buildDreamLyricsPrompt(a: { name: string; dream: string; scenes: string; why: string }): string {
   return [
     'Reorganize MY OWN WORDS below into a radio-grade song, the way Taylor Swift would: concrete scenes, conversational lines, real emotional lift. This is MY song — keep my exact phrases wherever possible.',
     '',
     'MY RAW MATERIAL (use my words, my images, my names):',
     `• My dream — or what's been weighing on me: ${a.dream}`,
     `• The specific scenes of my best life: ${a.scenes}`,
-    `• Who I am in that life (my identity statements): ${a.identity}`,
+    `• Why this matters so much to me: ${a.why}`,
     a.name ? `• My name: ${a.name}` : '',
     '',
     'RULES:',
-    "• My \"I am ___\" statements are the hooks — weave them in nearly verbatim.",
     '• If I described a problem, the song is the life on the OTHER side of it — never sing the problem itself, only the life beyond it.',
     '• Present tense, first person, as if I am already living it.',
     '• ONE short title hook (2–5 words) repeated in the choruses; one singalong moment (like "whoa-oh-oh").',
@@ -471,7 +470,7 @@ export function V3_Chat({
       setPhase('why');
       botSay([
         `I can SEE it. 🌟`,
-        `Last one — who ARE you in that life? Finish this a few times: "I am ___". Go as big as you want — this is your song.`,
+        `Last one — why would that be so important to you, ${name}?`,
       ], 'text');
     } else if (phase === 'why') {
       data.current.why = value;
@@ -560,7 +559,7 @@ export function V3_Chat({
       songAbout: d.songAbout, detailText: d.detail, scene: d.scene, why: d.why,
       style: d.soundStyle, voice: d.voice, genres,
       promptOverride: buildDreamLyricsPrompt({
-        name: d.name, dream: d.detail, scenes: d.scene, identity: d.why,
+        name: d.name, dream: d.detail, scenes: d.scene, why: d.why,
       }),
     })
       .then((res) => {
