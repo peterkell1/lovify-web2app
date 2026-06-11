@@ -491,7 +491,7 @@ export function V3_Chat({
       setPhase('detail');
       botSay([
         `Hi ${fn}. Let's help you create a life you love. ✨`,
-        `Do you already have a vision of your dream — or is something bothering you right now? Either way, tell me everything.`,
+        `Do you already have a vision of your dream — or is something bothering you we can solve? Either way, tell me everything.`,
       ], 'text');
     } else if (phase === 'detail') {
       // Q1 answer: a dream OR a vent. Either way the AI flips it into
