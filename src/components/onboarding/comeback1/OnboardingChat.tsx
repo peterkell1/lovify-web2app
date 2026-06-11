@@ -90,6 +90,33 @@ async function suggestFlippedDreams(text: string, exclude: string[] = []): Promi
   return { reflection: String(j.reflection || '').trim().slice(0, 400), ideas };
 }
 
+// Personalized vision-image options of THEIR dream future (for the image
+// step) — 4 specific scenes with cinematic prompts, built from all three
+// answers. Pre-warmed at the last question so they're ready after the photo.
+async function suggestVisionIdeas(q1: string, scenes: string, why: string): Promise<{ e: string; t: string; prompt: string }[]> {
+  const res = await fetch(`${publicEnv.supabaseUrl}/functions/v1/suggest-comeback-ideas`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${publicEnv.supabaseAnonKey}`,
+      apikey: publicEnv.supabaseAnonKey,
+    },
+    body: JSON.stringify({ kind: 'visions', pain: q1, actions: why, dream: scenes }),
+  });
+  if (!res.ok) throw new Error(`visions ${res.status}`);
+  const j = await res.json();
+  const v = (j.visions || [])
+    .map((x: { emoji?: string; title?: string; prompt?: string }) => ({
+      e: String(x.emoji || '✨').slice(0, 4),
+      t: String(x.title || '').trim().slice(0, 60),
+      prompt: String(x.prompt || '').trim().slice(0, 500),
+    }))
+    .filter((x: { t: string; prompt: string }) => x.t && x.prompt)
+    .slice(0, 4);
+  if (!v.length) throw new Error('empty visions');
+  return v;
+}
+
 // ── "Help me imagine" banks (Q2 scenes / Q3 identity only — Q1 is a free
 // vent/dream; we want their own words first).
 const SCENE_IDEAS = [
@@ -315,6 +342,9 @@ export function V3_Chat({
   // "↻ More ideas": fetch a fresh AI batch (excluding what's shown) and
   // append — selections stay; the menu just keeps growing.
   const [moreLoading, setMoreLoading] = useState(false);
+  // AI-personalized vision options (pre-warmed at the why answer).
+  const [visionIdeas, setVisionIdeas] = useState<{ e: string; t: string; prompt: string }[] | null>(null);
+  const visionReqRef = useRef(false);
   const loadMoreIdeas = () => {
     if (moreLoading) return;
     setMoreLoading(true);
@@ -493,6 +523,14 @@ export function V3_Chat({
       ], 'text');
     } else if (phase === 'why') {
       data.current.why = value;
+      // Pre-warm the personalized VISION options from everything they said —
+      // ready by the time the photo is uploaded.
+      if (!visionReqRef.current) {
+        visionReqRef.current = true;
+        suggestVisionIdeas(data.current.detail, data.current.scene, value)
+          .then(setVisionIdeas)
+          .catch(() => { /* static set covers it */ });
+      }
       setPhase('photo');
       botSay([
         `That's the real you talking — and that's the heart of your song.`,
@@ -528,7 +566,7 @@ export function V3_Chat({
   };
 
   // ── Vision-scene (image look) chosen → pre-warm the image, move to sound ──
-  const visionSceneIdeas = () => VISION_SCENE_IDEAS[data.current.songAbout] || VISION_SCENE_DEFAULT;
+  const visionSceneIdeas = () => visionIdeas ?? (VISION_SCENE_IDEAS[data.current.songAbout] || VISION_SCENE_DEFAULT);
   const chooseVisionScene = (idea: { t: string; prompt: string }) => {
     data.current.visionScene = idea.prompt;
     pushUser(idea.t);
@@ -712,6 +750,8 @@ export function V3_Chat({
     setFlipTimedOut(false);
     setMoreLoading(false);
     flipReqRef.current = false;
+    setVisionIdeas(null);
+    visionReqRef.current = false;
     onPersist?.({ msgs: [], phase: 'name', mode: 'busy', vibes: [], data: { ...data.current }, nextId: 0, done: false });
     botSay(
       [
@@ -1203,22 +1243,6 @@ function PauseGlyph() {
   );
 }
 
-// Animated equalizer for the song-generation wait.
-function RevealEQ() {
-  const bars = [14, 26, 18, 34, 22, 38, 20, 30, 16, 28, 19, 24];
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 5, height: 46, padding: '2px 0 4px' }} aria-hidden>
-      {bars.map((h, i) => (
-        <motion.span
-          key={i}
-          style={{ width: 5, borderRadius: 3, background: LOVIFY.orangeGradient, display: 'block' }}
-          animate={{ height: [h * 0.35, h, h * 0.5, h * 0.85, h * 0.35] }}
-          transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut', delay: i * 0.09 }}
-        />
-      ))}
-    </div>
-  );
-}
 
 function RevealSpinner({ small = false }: { small?: boolean }) {
   const size = small ? 18 : 30;
@@ -1231,6 +1255,15 @@ function RevealSpinner({ small = false }: { small?: boolean }) {
   );
 }
 
+const SONG_WAIT_LINES = [
+  'Composing your melody…',
+  'Laying down the beat…',
+  'Recording your vocals…',
+  'Weaving your words in…',
+  'Mixing your anthem…',
+  'Mastering the final take…',
+];
+
 function ChatReveal({
   title, soundStyle, voice, visionUrl, visionState, song, songState, statusLine, onSave, onMedia, web,
 }: {
@@ -1240,6 +1273,15 @@ function ChatReveal({
   onSave?: (version?: number) => void; onMedia?: () => void; web?: boolean;
 }) {
   const [playing, setPlaying] = useState<number | null>(null);
+  // Cycle the wait-words while the song generates — visible motion in the
+  // copy itself (the old audio-bars implied playback that wasn't happening).
+  const [waitIdx, setWaitIdx] = useState(0);
+  const songWorkingNow = songState === 'working' || songState === 'idle';
+  useEffect(() => {
+    if (!songWorkingNow) return;
+    const t = setInterval(() => setWaitIdx((x) => (x + 1) % SONG_WAIT_LINES.length), 2100);
+    return () => clearInterval(t);
+  }, [songWorkingNow]);
   // Web: pulse the play buttons until the user plays a version, then calm down.
   const [playedAny, setPlayedAny] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -1280,12 +1322,23 @@ function ChatReveal({
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} style={{ alignSelf: 'stretch', width: '100%', display: 'flex', flexDirection: 'column', gap: 12, marginTop: 6, paddingBottom: 8 }}>
       <div style={{ textAlign: 'center', padding: '0 6px' }}>
         <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 18, color: LOVIFY.ink }}>{headline}</div>
-        <div style={{ marginTop: 4, fontFamily: SANS, fontSize: 13.5, fontWeight: songReady ? 700 : 500, color: songFailed ? LOVIFY.sub : songReady ? LOVIFY.orangeDeep : LOVIFY.sub }}>{sub}</div>
+        {songWorking ? (
+          <motion.div
+            key={waitIdx}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            style={{ marginTop: 4, fontFamily: SANS, fontSize: 13.5, fontWeight: 600, color: LOVIFY.orangeDeep }}
+          >
+            {SONG_WAIT_LINES[waitIdx]}
+          </motion.div>
+        ) : (
+          <div style={{ marginTop: 4, fontFamily: SANS, fontSize: 13.5, fontWeight: songReady ? 700 : 500, color: songFailed ? LOVIFY.sub : songReady ? LOVIFY.orangeDeep : LOVIFY.sub }}>{sub}</div>
+        )}
       </div>
 
-      {/* Progress bar + live equalizer while the song is being created. */}
+      {/* Progress bar while the song is being created. */}
       {(songWorking || songReady) && <RevealProgress done={songReady} />}
-      {songWorking && <RevealEQ />}
 
       {/* Vision on top — magical reveal on web once the image arrives. */}
       <div style={{ position: 'relative' }}>

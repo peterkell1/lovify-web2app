@@ -92,6 +92,7 @@ interface FlowState {
   photos: (string | null)[]; // [you, +3 others] as data URLs — face feeds the vision generator
   lyrics: string;       // AI-written (or edited) lyrics, fed to Mureka
   lyricsTitle: string;  // AI-written song title
+  savedVersion: number | null; // which song version they tapped Save on (0/1)
 }
 
 const initialState: FlowState = {
@@ -101,6 +102,7 @@ const initialState: FlowState = {
   songAbout: '', detailText: '', scene: '', why: '', soundStyle: '', voice: '',
   photos: [null, null, null, null],
   lyrics: '', lyricsTitle: '',
+  savedVersion: null,
 };
 
 // App flow = 31 screens, web flow = 27 (the 4 WEB_OMIT screens dropped). The
@@ -511,12 +513,25 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
           set('lyricsTitle', r.title);
           startSongGen(r.lyrics, r.title, r.soundStyle, r.voice);
         }}
-        onSave={() => { capturePostHogEvent('onboarding_song_created', { flow: 'onboarding_comeback1' }); next(); }}
+        onSave={(n) => {
+          // Remember which version they saved so the paywall keeps showing THEIR
+          // song + vision (it shouldn't vanish the moment they leave the chat).
+          set('savedVersion', typeof n === 'number' ? n : 0);
+          capturePostHogEvent('onboarding_song_created', { flow: 'onboarding_comeback1' });
+          next();
+        }}
         onBack={back}
       />;
       // Paywall sequence (Moongate-style): benefits → 7-days-free → reminder →
       // price → plan picker.
-      case 'paywall_benefits': return <V3_22_Trial onNext={next} onBack={back} />;
+      case 'paywall_benefits': return <V3_22_Trial
+        onNext={next} onBack={back}
+        savedSong={(song || visionUrl) ? {
+          cover: visionUrl || song?.image_url || null,
+          title: song?.title || state.lyricsTitle || 'Your song',
+          version: state.savedVersion,
+        } : null}
+      />;
       case 'paywall_7days_free': return <V3_TrialOffer onNext={next} onBack={back} />;
       case 'paywall_reminder': return <V3_TrialReminder onNext={next} onBack={back} />;
       case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} />;
