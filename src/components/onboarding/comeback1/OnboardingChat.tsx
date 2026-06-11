@@ -511,7 +511,7 @@ export function V3_Chat({
         setMsgs((m) => m.filter((x) => x.id !== tid));
         botSay([
           (r && r.reflection) || `Thank you for sharing that, ${name} — that's exactly what your song is made of. 🔥`,
-          `Lovify is here to help you change this. Which of these would be part of a new life you LOVE? Tap a few below — and add your own specifics: where you are, who's there, what people are saying 👇`,
+          `Now we're going to create a song that helps you bring this vision to life. 🎶 Select your favorite things below to help us build a life you love — and add your own specifics: where you are, who's there, what people are saying 👇`,
         ], 'text');
       });
     } else if (phase === 'scene') {
