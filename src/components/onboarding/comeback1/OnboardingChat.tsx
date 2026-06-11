@@ -1296,6 +1296,42 @@ function RevealProgress({ done }: { done: boolean }) {
   );
 }
 
+// Crisp SVG play/pause — the '▶' character renders as a blue emoji glyph on
+// iOS, which looked broken on the song rows.
+function PlayGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginLeft: 2 }} aria-hidden>
+      <path d="M8 5.2v13.6c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L9.8 4.2c-.8-.5-1.8.1-1.8 1z" fill="#fff" />
+    </svg>
+  );
+}
+function PauseGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+      <rect x="6" y="5" width="4.2" height="14" rx="1.4" fill="#fff" />
+      <rect x="13.8" y="5" width="4.2" height="14" rx="1.4" fill="#fff" />
+    </svg>
+  );
+}
+
+// Animated equalizer for the song-generation wait — the downtime should feel
+// like a studio working, not a stalled page.
+function RevealEQ() {
+  const bars = [14, 26, 18, 34, 22, 38, 20, 30, 16, 28, 19, 24];
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 5, height: 46, padding: '2px 0 4px' }} aria-hidden>
+      {bars.map((h, i) => (
+        <motion.span
+          key={i}
+          style={{ width: 5, borderRadius: 3, background: LOVIFY.orangeGradient, display: 'block' }}
+          animate={{ height: [h * 0.35, h, h * 0.5, h * 0.85, h * 0.35] }}
+          transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut', delay: i * 0.09 }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function RevealSpinner({ small = false }: { small?: boolean }) {
   const size = small ? 18 : 30;
   return (
@@ -1336,8 +1372,22 @@ function ChatReveal({
   const toggle = (n: number) => {
     const a = audioRef.current;
     if (!a || !songReady) return;
-    if (playing === n) { a.pause(); setPlaying(null); restoreRevealAmbient(); }
-    else { duckRevealAmbient(); a.play().then(() => { setPlaying(n); setPlayedAny(true); }).catch(() => {}); }
+    if (playing === n) { a.pause(); setPlaying(null); restoreRevealAmbient(); return; }
+    duckRevealAmbient();
+    // Optimistic: flip the UI immediately (iOS resolves play() late, which
+    // previously read as "I tapped and nothing happened"); if play is refused,
+    // reload the element and retry once before giving up.
+    setPlaying(n);
+    setPlayedAny(true);
+    const p = a.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => {
+        try {
+          a.load();
+          a.play().catch(() => { setPlaying(null); restoreRevealAmbient(); });
+        } catch { setPlaying(null); restoreRevealAmbient(); }
+      });
+    }
   };
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} style={{ alignSelf: 'stretch', width: '100%', display: 'flex', flexDirection: 'column', gap: 12, marginTop: 6, paddingBottom: 8 }}>
@@ -1346,8 +1396,10 @@ function ChatReveal({
         <div style={{ marginTop: 4, fontFamily: SANS, fontSize: 13.5, fontWeight: songReady ? 700 : 500, color: songFailed ? LOVIFY.sub : songReady ? LOVIFY.orangeDeep : LOVIFY.sub }}>{sub}</div>
       </div>
 
-      {/* Progress bar while the song + vision are being created. */}
+      {/* Progress bar while the song + vision are being created — with a live
+          equalizer so the wait feels like a studio at work, not dead air. */}
       {(songWorking || songReady) && <RevealProgress done={songReady} />}
+      {songWorking && <RevealEQ />}
 
       {/* Vision on top — magical reveal on web once the image arrives. */}
       <div style={{ position: 'relative' }}>
@@ -1428,7 +1480,7 @@ function ChatReveal({
                 transition={{ duration: 1.5, repeat: pulse ? Infinity : 0, ease: 'easeInOut' }}
                 style={{ position: 'relative', width: 48, height: 48, borderRadius: 24, border: 'none', cursor: songReady ? 'pointer' : 'default', background: songWorking ? 'rgba(166,109,56,0.18)' : LOVIFY.orangeGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: songReady ? '0 8px 20px -8px rgba(216,92,28,0.65)' : 'none' }}
               >
-                {songWorking ? <RevealSpinner small /> : <span style={{ color: '#fff', fontSize: 18, marginLeft: on ? 0 : 2 }}>{on ? '⏸' : '▶'}</span>}
+                {songWorking ? <RevealSpinner small /> : on ? <PauseGlyph /> : <PlayGlyph />}
               </motion.button>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1449,12 +1501,12 @@ function ChatReveal({
       })}
 
       {song?.audio_url && (
-        <audio ref={audioRef} src={song.audio_url} preload="auto" onEnded={() => { setPlaying(null); restoreRevealAmbient(); }} />
+        <audio ref={audioRef} src={song.audio_url} preload="auto" onEnded={() => { setPlaying(null); restoreRevealAmbient(); }} onError={() => { setPlaying(null); restoreRevealAmbient(); }} />
       )}
 
       <div style={{ textAlign: 'center', padding: '2px 8px 0', minHeight: 18 }}>
         <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub }}>
-          {songFailed ? '' : songWorking ? 'Hang tight — building your vision + song…' : 'Tap ▶ to listen, then Save the one you love'}
+          {songFailed ? '' : songWorking ? 'Hang tight — building your vision + song…' : 'Tap play to listen, then Save the one you love'}
         </span>
       </div>
 
@@ -1545,7 +1597,9 @@ function PhotoInput({
           fontFamily: SANS, fontSize: 15, fontWeight: 800,
           boxShadow: faces.length ? 'none' : '0 12px 26px -12px rgba(216,92,28,0.6)',
         }}>
-          <input type="file" accept="image/*" multiple {...(faces.length === 0 ? { capture: 'user' as const } : {})} onChange={handle} style={{ display: 'none' }} />
+          {/* No `capture` attr: on iOS it forces the camera; without it the
+              user gets the full sheet (Photo Library / Take Photo / Choose). */}
+          <input type="file" accept="image/*" multiple onChange={handle} style={{ display: 'none' }} />
           <span style={{ fontSize: 18 }}>📷</span> {faces.length === 0 ? 'Add my photo' : 'Add someone else'}
         </label>
       )}
