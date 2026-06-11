@@ -28,12 +28,8 @@ const demoCover = '/assets/onboarding/album-cover.png';
 // Two real demo songs the roleplay "creates" at the end (playable).
 const demoSong1 = '/assets/onboarding/v3/demo-song-1.mp3';
 const demoSong2 = '/assets/onboarding/v3/demo-song-2.mp3';
-// Nurse-comeback demo assets (the acted-out persona on /comeback1): her photo
-// (the 📷 step + the song row art), her vision (Disneyland with her son), and
-// the real nurse comeback track.
-const nursePhoto = '/assets/onboarding/comeback1/nurse-photo.jpg';
-const nurseVision = '/assets/onboarding/comeback1/nurse-vision.jpg';
-const nurseSong = '/assets/onboarding/comeback1/nurse-song.mp3';
+const webDemoSong = '/assets/onboarding/v3/web-demo-ten-feet-tall.mp3';
+const webDemoSong2 = '/assets/onboarding/v3/web-demo-ten-feet-tall-v2.mp3';
 // Premium illustrated heroes (Kive.ai) — warm, headphones, dreamy. home-hero is
 // the heart/sway for the landing; hero-float is the arms-wide joyful release.
 const homeHero = '/assets/onboarding/v3/home-hero.png';
