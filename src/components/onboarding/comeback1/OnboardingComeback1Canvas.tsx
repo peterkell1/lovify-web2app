@@ -11,7 +11,7 @@ import {
   V3_01_Splash,
   V3_DrugHook, V3_DrugReveal, V3_Discovery, V3_Science, V3_Achieve, V3_LovifyHelps,
   V3_FeatureChat,
-  V3_Familiarity, V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_SongIdeas, V3_ComebackMethod, V3_Referral,
+  V3_Familiarity, V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_SongIdeas, V3_Referral,
   V3_04_Story, V3_05_Promise,
   V3_10_Deepen, V3_TimeReassurance,
   V3_11_LeanedOn, V3_Genres,
@@ -147,7 +147,6 @@ const SCREENS: { id: string; label: string; node: ReactNode }[] = [
   { id: '14', label: '14 · The loop runs both ways (turn)', node: <V3_WhyBuilt onNext={noop} onBack={noop} /> },
   // ── Breadth → the comeback method (the heads-up before the demo) ──
   { id: '15', label: '15 · You can turn anything into a song', node: <V3_SongIdeas onNext={noop} onBack={noop} /> },
-  { id: '16', label: '16 · Start with your Comeback Song (method)', node: <V3_ComebackMethod onNext={noop} onBack={noop} /> },
   // ── Roleplay demo chat ──
   { id: '17', label: '17 · How it works (roleplay demo)', node: <WFeatureChat /> },
   // ── Quiz (trimmed) ──
