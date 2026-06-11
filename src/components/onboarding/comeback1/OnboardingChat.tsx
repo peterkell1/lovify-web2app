@@ -1251,16 +1251,17 @@ function RevealWave() {
   );
 }
 
-// Determinate-feeling progress bar: creeps to ~92% over the typical generation
-// time (~75s for a song), then snaps to 100% the moment the song is ready.
+// Determinate-feeling progress bar: races to ~90% in ~7s (songs usually land
+// right about then — a slow bar makes people leave), then creeps to 97% as a
+// buffer for slower generations, and snaps to 100% the moment the song is ready.
 function RevealProgress({ done }: { done: boolean }) {
   return (
     <div style={{ height: 8, borderRadius: 999, background: 'rgba(166,109,56,0.16)', overflow: 'hidden', margin: '2px 8px 2px' }}>
       <motion.div
         style={{ height: '100%', borderRadius: 999, background: LOVIFY.orangeGradient }}
         initial={{ width: '8%' }}
-        animate={{ width: done ? '100%' : '92%' }}
-        transition={{ duration: done ? 0.5 : 75, ease: done ? 'easeOut' : 'easeInOut' }}
+        animate={{ width: done ? '100%' : ['8%', '90%', '97%'] }}
+        transition={done ? { duration: 0.5, ease: 'easeOut' } : { duration: 30, times: [0, 0.23, 1], ease: 'easeOut' }}
       />
     </div>
   );
@@ -1324,6 +1325,9 @@ function ChatReveal({
   }, [songWorkingNow]);
   // Web: pulse the play buttons until the user plays a version, then calm down.
   const [playedAny, setPlayedAny] = useState(false);
+  // True while the track is mid-buffer on a slow connection — playback pauses
+  // itself with zero feedback otherwise, which reads as "it broke".
+  const [buffering, setBuffering] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   useEffect(() => () => {
     const a = audioRef.current;
@@ -1342,7 +1346,7 @@ function ChatReveal({
   const toggle = (n: number) => {
     const a = audioRef.current;
     if (!a || !songReady) return;
-    if (playing === n) { a.pause(); setPlaying(null); restoreRevealAmbient(); return; }
+    if (playing === n) { a.pause(); setPlaying(null); setBuffering(false); restoreRevealAmbient(); return; }
     duckRevealAmbient();
     // Optimistic: flip the UI immediately (iOS resolves play() late); retry
     // once via load() if refused.
@@ -1465,7 +1469,9 @@ function ChatReveal({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: SANS, fontSize: 15, fontWeight: 800, color: LOVIFY.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(song?.title || title || 'Your song')} · Version {n + 1}</div>
               {on
-                ? <RevealWave />
+                ? (buffering
+                  ? <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Still streaming — hold on… ⏳</div>
+                  : <RevealWave />)
                 : <div style={{ fontFamily: SANS, fontSize: 12.5, color: LOVIFY.sub, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{songWorking ? 'Producing your song…' : `${styleLabel} · ${voiceLabel}`}</div>}
             </div>
             <button
@@ -1480,7 +1486,17 @@ function ChatReveal({
       })}
 
       {song?.audio_url && (
-        <audio ref={audioRef} src={song.audio_url} preload="auto" onEnded={() => { setPlaying(null); restoreRevealAmbient(); }} onError={() => { setPlaying(null); restoreRevealAmbient(); }} />
+        <audio
+          ref={audioRef}
+          src={song.audio_url}
+          preload="auto"
+          onWaiting={() => setBuffering(true)}
+          onStalled={() => setBuffering(true)}
+          onPlaying={() => setBuffering(false)}
+          onCanPlay={() => setBuffering(false)}
+          onEnded={() => { setPlaying(null); setBuffering(false); restoreRevealAmbient(); }}
+          onError={() => { setPlaying(null); setBuffering(false); restoreRevealAmbient(); }}
+        />
       )}
 
       <div style={{ textAlign: 'center', padding: '2px 8px 0', minHeight: 18 }}>
