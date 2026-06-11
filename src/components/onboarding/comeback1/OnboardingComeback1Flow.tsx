@@ -39,7 +39,7 @@ import {
 } from './session';
 import { stashOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
 import { buildRcCheckoutUrl } from '@/lib/rcCheckout';
-import { trackPixel } from '@/lib/metaPixel';
+import { initMetaPixel, trackPixel } from '@/lib/metaPixel';
 
 // Funnel step ids (one per screen, in flow order) so PostHog can show
 // drop-off per screen. Keep in sync with the switch() below. This is the
@@ -121,6 +121,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
     [mode],
   );
   const TOTAL = stepIds.length;
+
+  // ── Meta Pixel boots WITH the funnel (web) ──
+  // Without this, fbq doesn't exist until /start/success: PageView /
+  // ViewContent / Lead silently no-op during the funnel and the _fbp cookie
+  // is never set (degrading the server-side CAPI Purchase match too).
+  useEffect(() => {
+    if (mode === 'web') initMetaPixel();
+  }, [mode]);
 
   // ── Eagerly preload every illustration on mount (web) ──
   // On a phone over cellular, fetching each hero only when its screen mounts
