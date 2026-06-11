@@ -3888,7 +3888,11 @@ const TRIAL_BENEFITS: { icon: string; t: string; d: string }[] = [
   { icon: '🔁', t: 'Daily play to rewire your mind', d: 'Press play every day and let the words take hold.' },
   { icon: '↩️', t: 'Cancel any time', d: 'Keep access for the duration you paid for.' },
 ];
-export function V3_22_Trial({ onNext, onBack }: NavProps) {
+export function V3_22_Trial({ onNext, onBack, savedSong }: NavProps & {
+  // The song they just saved in the chat (vision graphic + title), so it stays
+  // visible on the paywall instead of disappearing after they tap Save.
+  savedSong?: { cover: string | null; title: string; version?: number | null } | null;
+}) {
   return (
     <LovScreen>
       <LovBack onClick={onBack} />
@@ -3897,6 +3901,22 @@ export function V3_22_Trial({ onNext, onBack }: NavProps) {
         subcopy="Here's everything you get:"
         titleStyle={{ fontSize: 24 }}
       />
+      {savedSong && (
+        <div style={{ margin: '16px 24px 0', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 16, background: 'rgba(255,251,244,0.97)', border: `1px solid ${LOVIFY.line}`, boxShadow: '0 10px 24px -16px rgba(58,42,34,0.5)' }}>
+          <div style={{ width: 52, height: 52, borderRadius: 12, overflow: 'hidden', flexShrink: 0, background: LOVIFY.orangeGradient, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {savedSong.cover
+              ? <img src={savedSong.cover} alt="Your song vision" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontSize: 24 }}>🎵</span>}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: SANS, fontSize: 14.5, fontWeight: 800, color: LOVIFY.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {savedSong.title}{savedSong.version != null ? ` · Version ${savedSong.version + 1}` : ''}
+            </div>
+            <div style={{ fontFamily: SANS, fontSize: 12, color: LOVIFY.sub, marginTop: 2 }}>Your song & vision — waiting for you</div>
+          </div>
+          <span style={{ flexShrink: 0, fontFamily: SANS, fontSize: 12, fontWeight: 800, color: LOVIFY.orangeDeep, background: 'rgba(237,122,42,0.12)', borderRadius: 999, padding: '5px 10px' }}>Saved ❤️</span>
+        </div>
+      )}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '22px 26px 8px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         {TRIAL_BENEFITS.map((b) => (
           <div key={b.t} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
