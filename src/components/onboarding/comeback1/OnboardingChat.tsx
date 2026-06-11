@@ -1,42 +1,37 @@
 // @ts-nocheck -- ported from the (non-strict) Lovify app repo; web2app funnel code
-/* Lovify comeback1 — the Comeback Song Chat.
+/* Lovify Onboarding v3 — the Song Chat.
  *
- * ONE song for everybody: their comeback song. Three questions collect all the
- * raw material — the life they hate (pain), the action steps they'd give
- * someone they love (advice-to-other unlocks specificity even when stuck), and
- * the amazing life on the other side (dream). The formula's remaining beats —
- * ROOT CAUSE ("you lost who you used to be") and TURNING POINT ("you found
- * Lovify; press play every morning") — are delivered by the bot's
- * acknowledgments BETWEEN the questions, so the chat itself walks the user
- * through the pain→pleasure arc their song will follow.
+ * Replaces the old quiz screens (song-about → detail → scene → why → photo →
+ * sound → voice → lyrics) with ONE conversational experience that feels like
+ * the in-app Create chat: a warm assistant ("Lovify") asks one thing at a
+ * time, mirrors the user's exact words back, and uses their first name.
  *
  * It's a SCRIPTED flow (fixed, conversion-friendly question order) with
  * lightweight AI-style mirroring done client-side, plus three real calls:
  *   • suggest-song-styles  → 4 sound options as chips
- *   • creative-assistant   → the lyrics (via a comeback-structured prompt)
+ *   • creative-assistant   → the lyrics (at the end)
  * The vision + song generation themselves are kicked off by the parent flow
  * (onPhoto pre-warms the vision; onComplete starts the song), then the reveal
- * renders inline with the daily-ritual / "chapter one" retention framing.
+ * screen shows the finished result.
  */
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { LOVIFY, SANS, SERIF } from '@/components/onboarding/v3/theme';
 import { LovLogo } from '@/components/onboarding/v3/primitives';
 import {
-  suggestSoundStyles, generateLyrics, type SoundVibe,
+  suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe,
 } from '@/components/onboarding/v3/generation';
 import type { GeneratedSong } from '@/components/onboarding/v3/generation';
-import { publicEnv } from '@/lib/env';
 
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
 
 type Phase =
-  | 'name' | 'pain' | 'dream' | 'actions'
+  | 'name' | 'about' | 'detail' | 'scene' | 'why'
   | 'photo' | 'visionScene' | 'sound' | 'voice'
   | 'writing' | 'lyricsReview' | 'generating';
 
 type InputMode =
-  | 'busy' | 'text' | 'photo' | 'visionScene' | 'visionText'
+  | 'busy' | 'text' | 'about' | 'photo' | 'visionScene' | 'visionText'
   | 'soundLoading' | 'sound' | 'voice' | 'writing' | 'lyricsReview';
 
 interface ChatMsg {
@@ -50,13 +45,6 @@ interface ChatMsg {
 
 export interface ChatResult {
   name: string;
-  // The three comeback answers — the raw material for the song.
-  pain: string;               // Q1: the life they hate right now
-  actions: string;            // Q2: the advice/action steps they'd give someone they love
-  dream: string;              // Q3: the amazing life on the other side
-  // Legacy fields, filled by mapping (songAbout='My comeback', detail=actions,
-  // scene=dream, why=pain) so parent plumbing — vision pre-warm, FlowState,
-  // session analytics, stageSong — keeps working unchanged.
   songAbout: string;
   detail: string;
   scene: string;
@@ -70,59 +58,191 @@ export interface ChatResult {
   title: string;
 }
 
-// ── The three comeback questions ──────────────────────────────────
-// Every song is a comeback song — no topic picker. The bot's acknowledgments
-// between these carry the formula's ROOT CAUSE and TURNING POINT beats, so
-// the conversation itself walks the user through the arc of their song.
-
-// ── "Help me…" ideas (Q2/Q3 only — Q1 venting gets NO crutch on purpose:
-// people are good at naming their pain; we want their own words). The live
-// ideas are AI-generated from what the user just vented (see the suggest
-// helpers below); these banks are the offline/failure fallbacks.
-export interface IdeaSection { title?: string; ideas: string[] }
-// Q3 fallback — the best-version-of-you picker: character traits + consistent
-// daily actions (the AI personalizes both from their pain + dream).
-const FALLBACK_ACTION_SECTIONS: IdeaSection[] = [
-  { title: 'Character traits', ideas: ['Unshakeable', 'Disciplined as hell', 'Magnetic', 'Fearless', 'Calm under pressure', 'Full of life', 'Relentless', 'Big-hearted', 'Sharp & focused', 'Playful'] },
-  { title: 'Daily actions', ideas: ['Wake up before my alarm', 'Train every morning', 'Plan my week on Sundays', 'Eat like I respect myself', 'Show up for the people I love', 'Protect my evenings'] },
-];
-// Q3 fallback — best-case-scenario moments.
-const FALLBACK_DREAM_IDEAS: IdeaSection[] = [
-  { ideas: [
-    'I wake up excited, before the alarm',
-    "I'm proud of what I see in the mirror",
-    'My family says I seem happier — and I am',
-    'Someone tells me "you\'re glowing"',
-    'I love the work I do all day',
-    'Not just surviving — living a life I choose',
-  ] },
+const ABOUT_OPTIONS = [
+  { e: '🌟', l: 'Who I want to be' },
+  { e: '✨', l: 'Something I want to experience' },
+  { e: '💪', l: 'Overcoming a problem' },
+  { e: '❤️', l: 'Someone I love' },
 ];
 
-// ── Vision options: SPECIFIC future scenes the user can see themselves in
-// ("What vision of the future do you want to see yourself in?"). Always the
-// dream side of the comeback — concrete moments, not abstract moods.
-const COMEBACK_VISION_IDEAS: { e: string; t: string; prompt: string }[] = [
-  { e: '🌅', t: 'Coffee on my porch at sunrise, at peace', prompt: 'as the comeback version of myself at golden-hour sunrise, coffee in hand on a beautiful porch, calm, glowing and at peace, planning the life I want, cinematic warm light' },
-  { e: '💪', t: 'Fit & glowing after a morning workout', prompt: 'as a fit, glowing version of myself right after a morning workout, strong and energized, sunrise light, cinematic' },
-  { e: '🎉', t: 'Celebrating a big win with people I love', prompt: 'as myself celebrating a big win surrounded by the people I love, joyful golden light, radiant and alive, cinematic' },
-  { e: '🏔️', t: 'On a mountaintop — strong & free', prompt: 'as myself standing on a mountaintop at sunrise, arms open, strong and free, the hard chapter behind me, cinematic and triumphant' },
+// Web funnel: warmer, improvement-framed labels for the first question. `key`
+// maps back to the internal option above so all the downstream tailoring
+// (reaction / detail question / idea banks) keeps working unchanged.
+const ABOUT_OPTIONS_WEB = [
+  { e: '🌟', l: "Becoming who I'm meant to be", key: 'Who I want to be' },
+  { e: '💪', l: 'Overcoming a big problem', key: 'Overcoming a problem' },
+  { e: '🎯', l: 'Achieving a big goal', key: 'Something I want to experience' },
+  { e: '🧠', l: 'Improving my mindset', key: 'Improving my mindset' },
 ];
 
-// ── Engaging loaders: cycling status lines so waits feel like work happening,
-// not a stalled spinner. One set for the style suggestions, one for lyrics.
+// The detail question is tailored to what they picked — exactly what the user
+// asked for. {name} is filled with their first name.
+const DETAIL_QUESTION: Record<string, string> = {
+  'Who I want to be': 'Who do you want to be, {name}? Describe it in specific detail — like it\'s already you.',
+  'Something I want to experience': 'What do you want to experience, {name}? Describe it in specific detail.',
+  'Overcoming a problem': 'Imagine you\'ve already beaten it, {name} — what does the best-case version of your life look like now? Describe it in specific detail.',
+  'Someone I love': 'Who\'s this song for — and what do you want them to feel, {name}? Describe it in specific detail.',
+  'Improving my mindset': 'What\'s one thing about how you think or feel that you\'d love to change, {name}?',
+};
+
+const ABOUT_REACTION: Record<string, string> = {
+  'Who I want to be': 'Ooh, I love this one.',
+  'Something I want to experience': 'Yes — let\'s make it real.',
+  'Overcoming a problem': 'I\'ve got you.',
+  'Someone I love': 'That\'s beautiful.',
+  'Improving my mindset': 'I hear you — that\'s a powerful place to start.',
+};
+
+// ── "Help me imagine" idea banks ──────────────────────────────────
+// For users who are low, stuck, or just can't find the words. Tapping an
+// idea sends it forward as their answer. The detail ideas are tailored to
+// what they're making the song about; scene/why are warm, universal starters.
+const DETAIL_IDEAS: Record<string, string[]> = {
+  'Who I want to be': [
+    'Someone calm and confident, who walks into any room feeling enough',
+    'A strong, healthy version of me with energy for the people I love',
+    'Financially free — not stressed about money anymore',
+    'Someone who finally believes in themselves and goes for it',
+    'A present, patient parent my kids feel safe with',
+    'Disciplined and focused — the person who actually follows through',
+  ],
+  'Something I want to experience': [
+    'Waking up in a home by the ocean with nowhere I have to be',
+    'Traveling somewhere new, fully present, no guilt, no rush',
+    'Standing on a stage doing the thing I always dreamed of',
+    'Falling in love and feeling completely safe with someone',
+    'Holding the life I built and realizing I actually made it',
+    'A quiet morning where everything finally feels okay',
+  ],
+  'Overcoming a problem': [
+    'Waking up free from the anxiety that\'s been following me',
+    'Finally past the heartbreak — whole and at peace again',
+    'Stronger than the habit that\'s been holding me back',
+    'Out of debt, breathing easy, in control of my money',
+    'Healed from what happened and proud of how far I\'ve come',
+    'Confident in my body after everything it\'s been through',
+  ],
+  'Someone I love': [
+    'My mom — I want her to know how much she means to me',
+    'My partner — I want them to feel chosen, every day',
+    'My kids — I want them to always feel how loved they are',
+    'A friend going through it — I want them to feel less alone',
+    'Someone I lost — a song to keep them close',
+    'My younger self — everything I wish they\'d heard',
+  ],
+};
+const DETAIL_IDEAS_DEFAULT = [
+  'A version of me that feels calm, confident, and free',
+  'Waking up genuinely excited about my life',
+  'Feeling proud of who I\'ve become',
+  'Surrounded by the people I love, fully present',
+  'Strong, healthy, and full of energy',
+  'Finally at peace with myself',
+];
+const SCENE_IDEAS = [
+  'Golden morning light, coffee in my hands, total calm',
+  'By the ocean — salt air, waves, nowhere I need to be',
+  'Surrounded by the people I love, everyone laughing',
+  'On a stage, lights up, the crowd on their feet',
+  'In my own home that finally feels like mine',
+  'Driving with the windows down, free and wide open',
+];
+const WHY_IDEAS = [
+  'Because I\'ve felt small for too long and I\'m done',
+  'Because the people I love deserve the best version of me',
+  'Because I want to prove to myself that I can',
+  'Because I\'m ready to feel alive again',
+  'Because I\'ve worked so hard — I want to feel it',
+  'Because I want to remember who I really am',
+];
+
+// Web funnel: shorter, multi-select idea chips (tap a few → Continue). Keyed by
+// the same internal option keys as DETAIL_IDEAS so the selection still routes.
+const DETAIL_IDEAS_WEB: Record<string, string[]> = {
+  'Who I want to be': [
+    'Calm and confident', 'Strong and healthy', 'Financially free',
+    'I believe in myself', 'Present and patient', 'Disciplined and focused',
+  ],
+  'Something I want to experience': [
+    'A home by the ocean', 'Travelling the world', 'On a stage, living my dream',
+    'Deeply in love', 'Proud of what I built', 'Calm, peaceful mornings',
+  ],
+  'Overcoming a problem': [
+    'Free from anxiety', 'Past the heartbreak', 'Stronger than my habits',
+    'Out of debt', 'Healed and proud', 'Confident in my body',
+  ],
+  'Improving my mindset': [
+    'Be kinder to myself', 'Worry & overthink less', 'Believe in myself more',
+    'Stay calm under pressure', 'Stop comparing myself', 'Be more focused',
+  ],
+};
+const DETAIL_IDEAS_DEFAULT_WEB = [
+  'Calm and confident', 'Excited about life', 'Proud of who I am',
+  'Present with loved ones', 'Strong and healthy', 'At peace with myself',
+];
+const SCENE_IDEAS_WEB = [
+  'Golden morning calm', 'By the ocean', 'Surrounded by loved ones',
+  'On a stage', 'In my dream home', 'Windows down, free',
+];
+const WHY_IDEAS_WEB = [
+  "I've felt small too long", 'My loved ones deserve my best', 'To prove I can',
+  'Ready to feel alive', "I've worked so hard for this", 'To remember who I am',
+];
+
+// Web-only overrides for the detail question — more accessible, concrete wording
+// for the abstract paths (people have clarity on what to change / their goal,
+// not on "who they're meant to be"). Falls back to the shared map when absent.
+const DETAIL_QUESTION_WEB: Record<string, string> = {
+  'Who I want to be': 'When you picture the best version of you, what\'s different about your life, {name}?',
+  'Something I want to experience': 'What\'s the big goal or moment you\'re going for, {name}? Describe it like it\'s already happening.',
+};
+
+// ── Vision-scene ideas: concrete IMAGE looks the user can pick after adding
+// their photo, so the generated picture is specific to them (not a generic
+// Gemini guess). Tailored to what the song is about. {who} = "you" or "you
+// and the people you added".
+// Identity-statement vision looks — "the version of me" the user wants to SEE,
+// phrased as who they're becoming (not abstract moods). Tailored to the goal.
+const VISION_SCENE_IDEAS: Record<string, { e: string; t: string; prompt: string }[]> = {
+  'Who I want to be': [
+    { e: '🏆', t: 'The successful me', prompt: 'as a successful, accomplished version of myself at the peak of my goals, glowing with quiet pride, cinematic golden light' },
+    { e: '👑', t: 'The confident me', prompt: 'as a radiantly confident version of myself, standing tall, walking into any room feeling enough, cinematic and majestic' },
+    { e: '🌅', t: 'The calm, grounded me', prompt: 'as a calm, grounded version of myself at sunrise by the water, serene and quietly powerful' },
+    { e: '🔥', t: 'The unstoppable me', prompt: 'as a fierce, unstoppable version of myself, glowing with energy and determination' },
+  ],
+  'Something I want to experience': [
+    { e: '🏝️', t: 'Me, living the dream', prompt: 'as myself living the dream in a breathtaking destination, golden light, completely free' },
+    { e: '🎉', t: 'Me at the moment I made it', prompt: 'as myself in the joyful moment I dreamed of, celebrating, radiant and alive' },
+    { e: '✈️', t: 'Me, free & adventurous', prompt: 'as myself out in a stunning landscape, arms open, free and alive, cinematic travel vibe' },
+    { e: '🌇', t: 'Me, blissful & at peace', prompt: 'as myself bathed in warm golden-hour light, peaceful and full of wonder' },
+  ],
+  'Overcoming a problem': [
+    { e: '🚀', t: 'The thriving, successful me', prompt: 'as a thriving, successful version of myself in full control, glowing with accomplishment, cinematic' },
+    { e: '💪', t: 'The me who beat it', prompt: 'as a strong, victorious version of myself having overcome it, breaking into the light, triumphant' },
+    { e: '🕊️', t: 'The free, at-peace me', prompt: 'as a calm, at-peace version of myself, a weight finally lifted, soft warm light, serene' },
+    { e: '🌄', t: 'Me, brand-new chapter', prompt: 'as myself at sunrise on a mountaintop, the hard part behind me, hopeful and renewed' },
+  ],
+  'Someone I love': [
+    { e: '❤️', t: 'Us, together & glowing', prompt: 'together in a warm, intimate, loving moment, soft golden light, tender and beautiful' },
+    { e: '🏡', t: 'Our happy life', prompt: 'cozy at home together, warm and happy, full of love and comfort' },
+    { e: '🌅', t: 'A perfect day together', prompt: 'sharing a perfect golden-hour moment outdoors together, joyful and connected' },
+    { e: '✨', t: 'A timeless portrait', prompt: 'a timeless, cinematic portrait together, glowing with love and meaning' },
+  ],
+};
+const VISION_SCENE_DEFAULT = [
+  { e: '🏆', t: 'The successful me', prompt: 'as a successful, accomplished version of myself, glowing with quiet pride, cinematic golden light' },
+  { e: '👑', t: 'The confident me', prompt: 'as a bold, confident version of myself that radiates success' },
+  { e: '🕊️', t: 'The calm, at-peace me', prompt: 'as a calm, serene, at-peace version of myself, soft natural light' },
+  { e: '🎉', t: 'Me, celebrating life', prompt: 'as myself in a joyful, celebratory moment, radiant and alive' },
+];
+
+// Cycling status loaders — the waits should read as work happening.
 const SOUND_LOADING_LINES = [
   'Loading styles…',
   'Listening to your story…',
-  'Matching sounds to your comeback…',
+  'Matching sounds to your story…',
   'Tuning the energy…',
 ];
-const IDEA_LOADING_LINES = [
-  'Brainstorming ideas from your story…',
-  'Reading what you wrote…',
-  'Picturing your best-case moments…',
-];
-// The wait IS the product moment: these lines tell the user what the song
-// really is — beliefs, identity and imagination work, not just lyrics.
 const WRITING_LINES = [
   'Studying who you want to become…',
   'Finding the beliefs that set you free…',
@@ -170,147 +290,15 @@ function shortQuote(s: string): string {
   return clip + (w.length > 9 ? '…' : '');
 }
 
-// Offline fallback so the song can still attempt if lyrics generation fails.
-// This is also what renders in preview/no-credit environments, so it follows
-// the full comeback arc (pain → root cause → turning point → actions → amazing
-// life → joy), weaving in the user's own words.
-function fallbackLyrics(pain: string, actions: string, dream: string): string {
-  const p = shortQuote(pain) || 'Another day that wears me down';
-  const a = shortQuote(actions) || 'Showing up for me, one step at a time';
-  const d = shortQuote(dream) || 'The life I choose, finally mine';
-  return `[Verse 1]
-${p}
-Caught my reflection, didn't know that face
-Just getting through, day after day
-
-[Verse 2]
-I forgot who I was — gave it all away
-There's nothing left of me at the end of the day
-God, I miss who I used to be
-
-[Pre-Chorus]
-Then I made this song about who I'm becoming
-Press play every morning, rewiring my mind
-
-[Chorus]
-${a}
-Little steps, but I feel the change
-I'm coming back to life
-
-[Bridge]
-${d}
-It's closer than it's ever been
-
-[Final Chorus]
-I'm not just surviving — I'm living the life I choose
-This is my comeback, and I'm never looking back
-
-[Outro]
-Tomorrow when my alarm goes off — press play
-Every morning, 'til every line comes true
-This is only chapter one… who will I become next?`;
+function fill(t: string, name: string): string {
+  return t.replace(/\{name\}/g, name || 'friend');
 }
 
-// The comeback songwriting formula, sent verbatim to creative-assistant via
-// generateLyrics({ promptOverride }). The user answers 3 questions; this brief
-// supplies the rest: the narrative arc (root cause, turning point, becoming),
-// the earworm craft rules, and the ritual outro (never an ad-style CTA).
-function buildComebackLyricsPrompt(a: { name: string; pain: string; actions: string; dream: string }): string {
-  return [
-    "Write my COMEBACK SONG — a radio-grade story song about my life turning around, written the way Taylor Swift writes: a narrative songwriter telling MY story with concrete little details, conversational lines and real emotional turns. Never generic self-help, never an ad.",
-    '',
-    'MY RAW MATERIAL (weave my exact words and images in):',
-    `• The life I hate right now: ${a.pain}`,
-    `• My way out — the actions I'd take: ${a.actions}`,
-    `• The life I'm walking into: ${a.dream}`,
-    a.name ? `• My name: ${a.name}` : '',
-    '',
-    'STORY ARC — exactly these 7 sections, nothing more, with these line budgets:',
-    '[Verse 1] (4 short lines) THE LIFE I HATE — open mid-scene in a real moment of MY life.',
-    '[Pre-Chorus] (3 lines) THE ROOT CAUSE — I lost who I used to be; I forgot who I am. Make it ache.',
-    "[Chorus] (6 lines) THE TURNING POINT — I made a song about who I'm becoming, and I press play every morning, rewiring my mind. This chorus carries THE HOOK.",
-    '[Verse 2] (4 short lines) BECOMING — me LIVING the traits and daily actions I chose, as vivid mini-scenes.',
-    '[Bridge] (4 lines) THE SHIFT — I catch myself already changed; someone close to me notices.',
-    "[Final Chorus] (6 lines) THE AMAZING LIFE — the same hook, but now it's TRUE: present tense, full joy, living the life I choose.",
-    "[Outro] (3 lines) THE RITUAL + WHAT'S NEXT — never a call-to-action. Tomorrow the alarm rings, I press play again — until every line is true. This is only chapter one.",
-    '',
-    'SPECIFICITY — this is the difference between MY song and a stock song:',
-    '• Every concrete image MUST come from my raw material above — my words, my scenes, my people.',
-    "• If I didn't mention it, do NOT invent it. No stock scenes (no microwave dinners, no mirror moments, no rain on windows) unless I actually said them.",
-    '• The listener should think: nobody else could have this exact song.',
-    '',
-    'EARWORM RULES — make it stick:',
-    '• ONE short title hook (2–5 words) repeated in both choruses and the outro; it is also the song title.',
-    '• One singalong non-lexical hook (like "whoa-oh-oh") introduced in the first chorus and reused once.',
-    '• Concrete nouns over abstractions. Short conversational lines a person could sing in the car.',
-    '• First person all the way through, in my voice.',
-    '',
-    'Never include "download", app-store language, or advertising of any kind — this is MY song.',
-    'Output ONLY the song sections and lyrics — no production notes, no commentary.',
-    'LENGTH IS A HARD CONSTRAINT: 30 lines total, 220 words maximum. The greats run ~235 words; mine must too. Before you answer, count your words — if you are over 220, cut whole lines until you fit. Short beats complete.',
-    'Please write my song now.',
-  ].filter((l, i) => l !== '' || i > 0).join('\n');
-}
-
-// ── AI idea suggestions (Q2 actions / Q3 dreams) ──────────────────
-// Personalized to what the user just vented, via the `suggest-comeback-ideas`
-// edge function (source ships in this repo: docs/edge-functions/, deploy with
-// `supabase functions deploy suggest-comeback-ideas --project-ref <ref>`).
-// Pre-warmed the moment the previous answer lands so ideas are usually ready
-// by the time the user taps for help. Until the function is deployed — or on
-// any failure — the static banks above fill in silently.
-async function suggestIdeas(body: { kind: 'actions' | 'dreams' | 'visions'; pain: string; actions?: string; dream?: string }): Promise<unknown> {
-  const res = await fetch(`${publicEnv.supabaseUrl}/functions/v1/suggest-comeback-ideas`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${publicEnv.supabaseAnonKey}`,
-      apikey: publicEnv.supabaseAnonKey,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`suggest-comeback-ideas ${res.status}`);
-  return res.json();
-}
-
-const clip = (s: unknown) => String(s ?? '').trim().slice(0, 60);
-
-/** The best version of THEM, ready to pick from: character traits + the
- *  consistent daily actions that get them to their dream. (Asked third.) */
-async function suggestActionSections(pain: string, dream: string): Promise<IdeaSection[]> {
-  const j = (await suggestIdeas({ kind: 'actions', pain, dream })) as {
-    traits?: unknown[];
-    actions?: unknown[];
-  };
-  const traits = (j.traits || []).map(clip).filter(Boolean).slice(0, 12);
-  const acts = (j.actions || []).map(clip).filter(Boolean).slice(0, 7);
-  const sections: IdeaSection[] = [];
-  if (traits.length) sections.push({ title: 'Character traits', ideas: traits });
-  if (acts.length) sections.push({ title: 'Daily actions', ideas: acts });
-  if (!sections.length) throw new Error('empty traits/actions');
-  return sections;
-}
-
-/** Personalized reflection (the "I heard you" ack) + vivid best-case-scenario
- *  moments from their vent. (Asked second, right after the pain.) */
-async function suggestDreamSections(pain: string): Promise<{ reflection: string; sections: IdeaSection[] }> {
-  const j = (await suggestIdeas({ kind: 'dreams', pain })) as { reflection?: string; ideas?: unknown[] };
-  const ideas = (j.ideas || []).map(clip).filter(Boolean).slice(0, 7);
-  if (!ideas.length) throw new Error('empty ideas');
-  return { reflection: String(j.reflection || '').trim().slice(0, 400), sections: [{ ideas }] };
-}
-
-/** Personalized vision-image options of THEIR dream future (image step). */
-async function suggestVisionIdeas(pain: string, actions: string, dream: string): Promise<{ e: string; t: string; prompt: string }[]> {
-  const j = (await suggestIdeas({ kind: 'visions', pain, actions, dream })) as {
-    visions?: { emoji?: string; title?: string; prompt?: string }[];
-  };
-  const v = (j.visions || [])
-    .map((x) => ({ e: String(x.emoji || '✨').slice(0, 4), t: clip(x.title), prompt: String(x.prompt || '').trim().slice(0, 500) }))
-    .filter((x) => x.t && x.prompt)
-    .slice(0, 4);
-  if (!v.length) throw new Error('empty visions');
-  return v;
+// Tiny offline fallback so the song can still attempt if lyrics fail.
+function fallbackLyrics(detail: string, why: string): string {
+  const a = shortQuote(detail) || 'this life I see';
+  const b = shortQuote(why) || 'everything I am';
+  return `[Verse 1]\nI can see it clear as morning light\n${a}\nNo more standing still, no more doubt\nThis is the life I'm stepping into\n\n[Chorus]\nI'm coming alive, I feel it now\n${b}\nThis is who I'm meant to be`;
 }
 
 // Everything needed to restore the chat exactly where the user left off when
@@ -327,7 +315,7 @@ export interface ChatPersist {
 }
 
 export function V3_Chat({
-  genres, onPhoto, onComplete, onBack, persisted: persistedRaw, onPersist,
+  genres, onPhoto, onComplete, onBack, persisted, onPersist,
   visionUrl, visionState, song, songState, songStatusLine, onSave, web, playing, onToggleSound,
 }: {
   genres: string[];
@@ -358,28 +346,18 @@ export function V3_Chat({
   // The user saves the take they love → advances to the paywall.
   onSave?: (version?: number) => void;
 }) {
-  // Snapshots saved by the pre-comeback chat restore into phases that no
-  // longer exist — discard those and start the comeback chat fresh.
-  const persisted = ['about', 'detail', 'scene', 'why'].includes(persistedRaw?.phase as string)
-    ? null
-    : persistedRaw;
+  // Snapshots saved by the comeback-questions chat restore into phases that
+  // don't exist in this flow — discard those and start fresh.
+  if (persisted && ['pain', 'dream', 'actions'].includes(persisted.phase as string)) persisted = null;
   const [msgs, setMsgs] = useState<ChatMsg[]>(() => persisted?.msgs ?? []);
   const [phase, setPhase] = useState<Phase>(() => persisted?.phase ?? 'name');
   const [mode, setMode] = useState<InputMode>(() => persisted?.mode ?? 'busy');
   const [draft, setDraft] = useState('');
-  // Web "Help me…" is multi-select: tap several short ideas, then Continue.
+  const [showIdeas, setShowIdeas] = useState(false);
+  // Web "Help me imagine" is multi-select: tap several short ideas, then Continue.
   const [selectedIdeas, setSelectedIdeas] = useState<string[]>([]);
   const toggleIdea = (idea: string) =>
     setSelectedIdeas((s) => (s.includes(idea) ? s.filter((x) => x !== idea) : [...s, idea]));
-  // AI-personalized idea sections (Q2 actions / Q3 dreams) — pre-warmed the
-  // moment the previous answer lands; the static banks fill in until/if the
-  // AI replies. Guarded so each is requested once per run.
-  const [actionIdeas, setActionIdeas] = useState<IdeaSection[] | null>(null);
-  const [dreamIdeas, setDreamIdeas] = useState<IdeaSection[] | null>(null);
-  const [visionIdeas, setVisionIdeas] = useState<{ e: string; t: string; prompt: string }[] | null>(null);
-  const actionReqRef = useRef(false);
-  const dreamReqRef = useRef(false);
-  const visionReqRef = useRef(false);
   const [vibes, setVibes] = useState<SoundVibe[]>(() => persisted?.vibes ?? []);
   // True once lyrics are confirmed — the reveal (vision + songs) renders inline
   // at the bottom of the chat. Restored straight to revealed on back-nav.
@@ -387,8 +365,7 @@ export function V3_Chat({
 
   // Collected answers (kept in a ref so async generation reads the latest).
   const data = useRef<ChatResult>(persisted?.data ?? {
-    name: '', pain: '', actions: '', dream: '',
-    songAbout: '', detail: '', scene: '', why: '',
+    name: '', songAbout: '', detail: '', scene: '', why: '',
     soundStyle: '', voice: '', face: null, faces: [], visionScene: '',
     lyrics: '', title: '',
   });
@@ -463,27 +440,23 @@ export function V3_Chat({
     seededRef.current = true;
     botSay(
       [
-        "Hey, it's Lovify. Let's make your comeback song. 🖤",
-        "First, what's your name?",
+        web
+          ? "Hey it's Lovify. It's time to become the person you were meant to be!"
+          : "Hey! I'm going to help you make your very first song. 🎶",
+        web ? "First, what's your name?" : "First — what should I call you?",
       ],
       'text',
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load AI sound styles when we enter the sound phase. The context is built
-  // here (not via buildStyleContext) so it frames the song as a comeback
-  // anthem — pain, plan, and destination all inform the suggested vibes.
+  // Load AI sound styles when we enter the sound phase.
   useEffect(() => {
     if (mode !== 'soundLoading') return;
     const d = data.current;
-    const ctx = [
-      'The song is a comeback anthem — the story of someone turning their life around, from the life they hate to the life they love.',
-      d.pain && `What they're escaping: ${d.pain}`,
-      d.actions && `The comeback plan (their own action steps): ${d.actions}`,
-      d.dream && `The amazing life they're heading to: ${d.dream}`,
-      genres?.length && `Genres they love: ${genres.join(', ')}.`,
-    ].filter(Boolean).join('\n');
+    const ctx = buildStyleContext({
+      songAbout: d.songAbout, detailText: d.detail, scene: d.scene, why: d.why, genres,
+    });
     let cancelled = false;
     suggestSoundStyles(ctx, [], 0)
       .then((v) => { if (!cancelled) { setVibes(v); setMode('sound'); } })
@@ -494,113 +467,71 @@ export function V3_Chat({
 
   const name = data.current.name;
 
-  // Idea sections for the current question — the AI-personalized set once it
-  // arrives, the static bank otherwise. NO ideas on the pain question: people
-  // are good at naming their pain; we want their own words, not a crutch.
-  const currentIdeaSections = (): IdeaSection[] => {
-    if (phase === 'actions') return actionIdeas ?? FALLBACK_ACTION_SECTIONS;
-    if (phase === 'dream') return dreamIdeas ?? FALLBACK_DREAM_IDEAS;
+  // Ideas to show under "Help me imagine" for the current question.
+  const currentIdeas = (): string[] => {
+    if (phase === 'detail') return web
+      ? (DETAIL_IDEAS_WEB[data.current.songAbout] || DETAIL_IDEAS_DEFAULT_WEB)
+      : (DETAIL_IDEAS[data.current.songAbout] || DETAIL_IDEAS_DEFAULT);
+    if (phase === 'scene') return web ? SCENE_IDEAS_WEB : SCENE_IDEAS;
+    if (phase === 'why') return web ? WHY_IDEAS_WEB : WHY_IDEAS;
     return [];
   };
-  // Ideas may still be generating when a question lands (the actions call
-  // fires at the dream answer) — show a brainstorming loader briefly, then
-  // fall back to the static bank so the list always appears.
-  const [ideasTimedOut, setIdeasTimedOut] = useState(false);
-  useEffect(() => {
-    const waiting = (phase === 'actions' && !actionIdeas) || (phase === 'dream' && !dreamIdeas);
-    if (!waiting) return;
-    setIdeasTimedOut(false);
-    const t = window.setTimeout(() => setIdeasTimedOut(true), 9000);
-    return () => window.clearTimeout(t);
-  }, [phase, actionIdeas, dreamIdeas]);
-  const ideasPending = !ideasTimedOut
-    && ((phase === 'actions' && !actionIdeas) || (phase === 'dream' && !dreamIdeas));
-  // The dream step keeps its ideas BEHIND a "✨ Help me imagine" button — the
-  // wish moment belongs to the user's own words first; the AI list is a hand
-  // for whoever needs one, not the default.
-  const [showDreamIdeas, setShowDreamIdeas] = useState(false);
-  // Character-creator traits: the AI sends a pool of ~10; we show 5 at a time
-  // (selected ones stay pinned) with a "↻ More traits" flipper — like browsing
-  // options while customizing a game character.
-  const [traitPage, setTraitPage] = useState(0);
-  useEffect(() => { setShowDreamIdeas(false); setTraitPage(0); }, [phase]);
 
-  // ── Text answers (name / pain / actions / dream) ──
-  // Accepts an explicit value so tapped "Help me…" ideas can move forward too.
-  // The acks between questions deliver the formula beats the user doesn't
-  // answer: ROOT CAUSE after the pain, TURNING POINT after the plan.
+  // ── Text answers (name / detail / scene / why) ──
+  // Accepts an explicit value so a tapped "imagine" idea can move forward too.
   const submitText = (override?: string) => {
     const value = (override ?? draft).trim();
     if (!value) return;
     setDraft('');
+    setShowIdeas(false);
     setSelectedIdeas([]);
     pushUser(value);
 
     if (phase === 'name') {
       const fn = firstName(value);
       data.current.name = fn;
-      setPhase('pain');
-      // The method was already taught on the "comeback song" screen — dive in.
+      setPhase('about');
+      botSay(
+        web
+          ? [`Hi ${fn}. Nice to meet you.`, 'Tell me — what would make the biggest difference to creating a life that you love?']
+          : [`Love that — hey ${fn}! 🧡`, 'So tell me… what should your first song be about?'],
+        'about',
+      );
+    } else if (phase === 'detail') {
+      data.current.detail = value;
+      setPhase('scene');
+      // The old clipped "quote-back" reads broken on a real, longer answer. On
+      // web, warmly affirm it instead of parroting a fragment.
+      const detailAck = web
+        ? `I love that, ${name} — I can tell this really matters to you. 🔥`
+        : `"${shortQuote(value)}" — I love that.`;
       botSay([
-        `Nice to meet you, ${fn}.`,
-        `Let's start by getting it out 😤 What are 4 things that are paining you in your life right now? Tell me in specific detail`,
+        detailAck,
+        `Close your eyes for a second, ${name}. Picture it like it's already real… what do you see around you? Where are you?`,
       ], 'text');
-    } else if (phase === 'pain') {
-      // Pain → DREAM next (best case first — it's lighter, and the steps feel
-      // easier once they can already see where they're going).
-      data.current.pain = value;
-      data.current.why = value; // legacy mapping for parent plumbing/analytics
-      setPhase('dream');
-      // The ack must prove we HEARD them — AI-written from their exact words
-      // (the same call also brings the personalized dream moments). Typing
-      // dots run while it thinks; if it's slow/fails we ack claim-safe.
-      dreamReqRef.current = true;
-      const req = suggestDreamSections(value)
-        .then((r) => { setDreamIdeas(r.sections); return r; })
-        .catch(() => null);
-      setMode('busy');
-      const tid = nid();
-      setMsgs((m) => [...m, { id: tid, role: 'bot', kind: 'typing' }]);
-      const timeout = new Promise<null>((res) => { window.setTimeout(() => res(null), 9000); });
-      Promise.race([req, timeout]).then((r) => {
-        setMsgs((m) => m.filter((x) => x.id !== tid));
-        botSay([
-          (r && r.reflection) || `Thank you for being real with me, ${name}. Getting it all out is the first step.`,
-          `Now, imagine you had a magic wand 🪄 that could change anything about you or your life — what are the first 4 things you'd wish for?`,
-        ], 'text');
-      });
-    } else if (phase === 'dream') {
-      data.current.dream = value;
-      data.current.scene = value;             // legacy: the scene the vision falls back to
-      data.current.songAbout = 'My comeback'; // legacy label for plumbing/analytics
-      // Pre-warm the personalized action ideas bridging their pain → dream.
-      if (!actionReqRef.current) {
-        actionReqRef.current = true;
-        suggestActionSections(data.current.pain, value).then(setActionIdeas).catch(() => { /* fallback bank covers it */ });
-      }
-      setPhase('actions');
-      botSay([
-        `Now THAT's a life worth fighting for. 🔥`,
-        `Time to build the comeback version of you — like creating your character 🎮`,
-        `Pick the traits and daily moves you want to run on — and/or type your own 👇`,
-      ], 'text');
-    } else if (phase === 'actions') {
-      data.current.actions = value;
-      data.current.detail = value; // legacy mapping
-      // Pre-warm the personalized VISION options (shown after the photo) from
-      // everything they've told us — so the image choices depict THEIR dream.
-      if (!visionReqRef.current) {
-        visionReqRef.current = true;
-        suggestVisionIdeas(data.current.pain, value, data.current.dream)
-          .then(setVisionIdeas)
-          .catch(() => { /* static vision set covers it */ });
-      }
+    } else if (phase === 'scene') {
+      data.current.scene = value;
+      setPhase('why');
+      botSay([`I can see it. 🌅`, `And why does this matter so much to you, ${name}?`], 'text');
+    } else if (phase === 'why') {
+      data.current.why = value;
       setPhase('photo');
       botSay([
-        `That's the comeback plan — you already know the way back. 💪 Your song is going to plant it in your mind, every time you press play.`,
-        `Add a photo of yourself so you can SEE the you you're coming back to. (Add anyone else you want in the picture too.)`,
+        `That right there — that's the heart of your song.`,
+        `Now add a photo of yourself, ${name} — and anyone else you want in the picture (partner, family, friends).`,
       ], 'photo');
     }
+  };
+
+  // ── Song-about chosen (chip) or free-typed. `bubble` is what we echo back as
+  // the user's message; `key` selects the tailored reaction/detail question (a
+  // free-typed answer falls back to the generic copy). ──
+  const chooseAbout = (label: string, bubble?: string) => {
+    data.current.songAbout = label;
+    pushUser(bubble ?? label);
+    setPhase('detail');
+    const detailQ = (web && DETAIL_QUESTION_WEB[label]) || DETAIL_QUESTION[label] || 'Describe it in specific detail, {name}.';
+    botSay([fill(ABOUT_REACTION[label] || 'Love it.', name), fill(detailQ, name)], 'text');
   };
 
   // ── Photos: stage one at a time, then confirm the whole set ──
@@ -613,18 +544,22 @@ export function V3_Chat({
     data.current.face = faces[0] ?? null;
     if (faces.length) pushUserPhotos(faces);
     setPhase('visionScene');
+    const who = faces.length > 1 ? `you and your ${faces.length - 1=== 1 ? 'person' : 'people'}` : 'you';
     botSay([
-      faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's who we're fighting for. ✨`,
-      `What vision of the future do you want to see yourself in, ${name}?`,
+      faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's going to look incredible. ✨`,
+      `Now let's picture YOU in it, ${name}. Which version of you should we bring to life? (or tap "Describe my own" to say it your way)`,
     ], 'visionScene');
   };
-  // No skip on the photo step — seeing THEMSELF in the vision is the payoff,
-  // and the very next step picks the future scene they'll appear in.
+  const skipPhoto = () => {
+    pushUser('Maybe later');
+    data.current.faces = [];
+    data.current.face = null;
+    setPhase('visionScene');
+    botSay([`No worries — we can add it anytime.`, `Which version of you should we picture, ${name}? (or describe your own)`], 'visionScene');
+  };
 
   // ── Vision-scene (image look) chosen → pre-warm the image, move to sound ──
-  // AI-personalized options of THEIR dream future (pre-warmed at the dream
-  // answer); the static comeback set covers failures/slow networks.
-  const visionSceneIdeas = () => visionIdeas ?? COMEBACK_VISION_IDEAS;
+  const visionSceneIdeas = () => VISION_SCENE_IDEAS[data.current.songAbout] || VISION_SCENE_DEFAULT;
   const chooseVisionScene = (idea: { t: string; prompt: string }) => {
     data.current.visionScene = idea.prompt;
     pushUser(idea.t);
@@ -634,7 +569,7 @@ export function V3_Chat({
       detail: data.current.detail, visionScene: idea.prompt,
     });
     setPhase('sound');
-    botSay([`Beautiful choice. 🎨`, `Now — what do you want your comeback song to sound like, ${name}?`], 'soundLoading');
+    botSay([`Beautiful choice. 🎨`, `Now let's make it sound like you. Which of these feels right, ${name}?`], 'soundLoading');
   };
   // Free-typed vision — the user describes exactly how they want to look.
   const chooseVisionText = (override?: string) => {
@@ -648,7 +583,7 @@ export function V3_Chat({
       detail: data.current.detail, visionScene: value,
     });
     setPhase('sound');
-    botSay([`Love it — I can see it. 🎨`, `Now — what do you want your comeback song to sound like, ${name}?`], 'soundLoading');
+    botSay([`Love it — I can see it. 🎨`, `Now let's make it sound like you. Which of these feels right, ${name}?`], 'soundLoading');
   };
 
   // ── Sound vibe chosen (chip) or free-typed style ──
@@ -673,26 +608,18 @@ export function V3_Chat({
     generateLyrics({
       songAbout: d.songAbout, detailText: d.detail, scene: d.scene, why: d.why,
       style: d.soundStyle, voice: d.voice, genres,
-      // The comeback arc, sent verbatim — pain → root cause → turning point →
-      // action steps → best self → amazing life → joy.
-      promptOverride: buildComebackLyricsPrompt({
-        name: d.name, pain: d.pain, actions: d.actions, dream: d.dream,
-      }),
     })
       .then((res) => {
-        // Strip any trailing production-note/commentary block — Mureka would
-        // sing it as lyrics otherwise. (The prompt forbids it too; belt+braces.)
-        d.lyrics = (res.content || '').replace(/\n\[(?:production|note|style note)[^\]]*\][\s\S]*$/i, '').trim();
-        d.title = res.title;
+        d.lyrics = res.content; d.title = res.title;
         if (res.style) d.soundStyle = res.style;
       })
-      .catch(() => { d.lyrics = fallbackLyrics(d.pain, d.actions, d.dream); d.title = 'My Comeback'; })
+      .catch(() => { d.lyrics = fallbackLyrics(d.detail, d.why); d.title = 'Your Song'; })
       .finally(() => {
         setLyricsDraft(d.lyrics);
         setPhase('lyricsReview');
         if (announce) {
           botSay([
-            `Here's your comeback song, ${name} — this is what we'll plant in your mind. 🧠`,
+            `Here's your song, ${name} — this is what we'll plant in your mind. 🧠`,
             `Read it over. Tweak anything that isn't quite you, then make it real.`,
           ], 'lyricsReview');
         } else {
@@ -740,35 +667,31 @@ export function V3_Chat({
   const submitFreeText = () => {
     const value = draft.trim();
     if (!value) return;
+    if (mode === 'about') { setDraft(''); setShowIdeas(false); chooseAbout(value); return; }
     if (mode === 'sound') { setDraft(''); chooseVibeText(value); return; }
     if (mode === 'voice') { setDraft(''); chooseVoice(value); return; }
     if (mode === 'visionScene' || mode === 'visionText') { chooseVisionText(); return; }
     submitText();
   };
 
-  // The bottom-right ↑ doubles as the "Continue" for multi-select ideas. If
-  // the user selected ideas AND typed their own, BOTH go into the answer —
-  // everything they gave us counts.
+  // The bottom-right ↑ doubles as the "Continue" for multi-select ideas: if the
+  // user has typed something, send that; otherwise submit their selected ideas.
   const sendActive = () => !!draft.trim() || selectedIdeas.length > 0;
   const sendOrContinue = () => {
-    const typed = draft.trim();
-    if (mode === 'text' && selectedIdeas.length) {
-      submitText([...selectedIdeas, typed].filter(Boolean).join('. '));
-      return;
-    }
-    if (typed) submitFreeText();
+    if (draft.trim()) { submitFreeText(); return; }
+    if (selectedIdeas.length) submitText(selectedIdeas.join(', '));
   };
 
-  // Steps where the bottom text bar is live. Chip steps (sound/voice/
+  // Steps where the bottom text bar is live. Chip steps (about/sound/voice/
   // visionScene) accept a typed answer too; pure loaders/photo do not.
   const textBarActive =
-    mode === 'text' || mode === 'sound' ||
+    mode === 'text' || mode === 'about' || mode === 'sound' ||
     mode === 'voice' || mode === 'visionScene' || mode === 'visionText';
 
   // Placeholder copy tuned to the step so typing feels intentional, not a fallback.
   const textBarPlaceholder =
     phase === 'name' ? 'Type your name…'
-    : phase === 'pain' ? 'Vent it all — or tap 🎤 to speak…'
+    : mode === 'about' ? 'Or type what it\'s about…'
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
     : mode === 'visionScene' || mode === 'visionText' ? 'Or describe how you want to look…'
@@ -796,25 +719,13 @@ export function V3_Chat({
     setMsgs([]);
     setPhase('name');
     setDraft('');
-    setSelectedIdeas([]);
-    // Clear the AI-personalized ideas + their request guards — otherwise a
-    // replay shows the PREVIOUS run's suggestions for the new run's answers.
-    setActionIdeas(null);
-    setDreamIdeas(null);
-    setVisionIdeas(null);
-    setIdeasTimedOut(false);
-    setShowDreamIdeas(false);
-    setTraitPage(0);
-    actionReqRef.current = false;
-    dreamReqRef.current = false;
-    visionReqRef.current = false;
+    setShowIdeas(false);
     setVibes([]);
     setRevealed(false);
     setStagedFaces([]);
     setLyricsDraft('');
     data.current = {
-      name: '', pain: '', actions: '', dream: '',
-      songAbout: '', detail: '', scene: '', why: '',
+      name: '', songAbout: '', detail: '', scene: '', why: '',
       soundStyle: '', voice: '', face: null, faces: [], visionScene: '',
       lyrics: '', title: '',
     };
@@ -824,8 +735,10 @@ export function V3_Chat({
     onPersist?.({ msgs: [], phase: 'name', mode: 'busy', vibes: [], data: { ...data.current }, nextId: 0, done: false });
     botSay(
       [
-        "Hey, it's Lovify. Let's make your comeback song. 🖤",
-        "First, what's your name?",
+        web
+          ? "Hey it's Lovify. It's time to become the person you were meant to be!"
+          : "Hey! I'm going to help you make your very first song. 🎶",
+        web ? "First, what's your name?" : "First — what should I call you?",
       ],
       'text',
     );
@@ -890,109 +803,88 @@ export function V3_Chat({
           <Bubble key={m.id} msg={m} />
         ))}
 
-        {/* The brainstorm ideas — Q2/Q3 only (the pain question gets no crutch:
-            we want their own words). Shown AUTOMATICALLY under the question:
-            AI-personalized to what they vented, grouped in tappable
-            multi-select categories. Tapping a few AND typing combine into one
-            answer when they hit ↑. */}
-        {/* Dream step: the ideas stay collapsed behind "Help me imagine". */}
-        {mode === 'text' && phase === 'dream' && !showDreamIdeas && (
-          <motion.button
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            onClick={() => setShowDreamIdeas(true)}
-            style={{
-              alignSelf: 'flex-start', cursor: 'pointer', marginTop: 2,
-              padding: '8px 14px', borderRadius: 18,
-              background: 'rgba(255, 251, 244, 0.7)', border: `1px solid ${LOVIFY.line}`,
-              fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub,
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            ✨ Help me imagine
-          </motion.button>
-        )}
-
-        {mode === 'text' && (phase === 'actions' || (phase === 'dream' && showDreamIdeas)) && (
-          ideasPending ? (
-            <div style={{ alignSelf: 'flex-start' }}>
-              <LoaderLine lines={IDEA_LOADING_LINES} />
-            </div>
-          ) : (
+        {/* "Help me imagine" lives right under the AI's question — a gentle hand
+            for anyone who's stuck or low. Left-aligned like a bot affordance so
+            it reads as part of the assistant's message. Hidden on the name step. */}
+        {mode === 'text' && phase !== 'name' && (
+          showIdeas ? (
             <motion.div
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}
             >
-              {currentIdeaSections().map((sec, si) => {
-                // Traits page like a character creator: selected stay pinned,
-                // the rest rotate 5-at-a-time via the "↻ More traits" flipper.
-                const isTraits = /trait/i.test(sec.title || '');
-                const PAGE = 5;
-                let visible = sec.ideas;
-                let canPage = false;
-                if (isTraits && sec.ideas.length > PAGE) {
-                  const sel = sec.ideas.filter((i) => selectedIdeas.includes(i));
-                  const unsel = sec.ideas.filter((i) => !selectedIdeas.includes(i));
-                  const room = Math.max(PAGE - sel.length, 2);
-                  const start = unsel.length ? (traitPage * room) % unsel.length : 0;
-                  const windowed = unsel.slice(start, start + room);
-                  if (windowed.length < room) windowed.push(...unsel.slice(0, room - windowed.length));
-                  visible = [...sel, ...windowed.filter((i, idx, a) => a.indexOf(i) === idx)];
-                  canPage = unsel.length > room;
-                }
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
+                <span style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
+                  {web ? 'Tap the ones that fit — or write your own' : 'Tap one that feels true — or write your own'}
+                </span>
+                <button onClick={() => { setShowIdeas(false); setSelectedIdeas([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.sub }}>Close</button>
+              </div>
+              {currentIdeas().map((idea) => {
+                const sel = web && selectedIdeas.includes(idea);
                 return (
-                  <div key={sec.title || si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {sec.title && (
-                      <div style={{ fontFamily: SANS, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LOVIFY.subSoft, padding: '4px 2px 0' }}>
-                        {sec.title}
-                      </div>
-                    )}
-                    {/* Light wrap of pill chips — scannable, not a wall of rows. */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {visible.map((idea) => {
-                        const sel = web && selectedIdeas.includes(idea);
-                        return (
-                          <button
-                            key={idea}
-                            onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
-                            style={{
-                              textAlign: 'left', cursor: 'pointer',
-                              padding: '9px 13px', borderRadius: 999,
-                              background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
-                              border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
-                              fontFamily: SANS, fontSize: 13.5, lineHeight: 1.35, color: LOVIFY.ink, fontWeight: sel ? 700 : 500,
-                              display: 'inline-flex', gap: 6, alignItems: 'center',
-                              boxShadow: '0 4px 12px -8px rgba(216,92,28,0.4)',
-                            }}
-                          >
-                            <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
-                            <span>{idea}</span>
-                          </button>
-                        );
-                      })}
-                      {canPage && (
-                        <button
-                          onClick={() => setTraitPage((p) => p + 1)}
-                          style={{
-                            cursor: 'pointer', padding: '9px 13px', borderRadius: 999,
-                            background: 'transparent', border: `1.5px dashed ${LOVIFY.orange}`,
-                            fontFamily: SANS, fontSize: 13.5, fontWeight: 700, color: LOVIFY.orangeDeep,
-                            display: 'inline-flex', gap: 6, alignItems: 'center',
-                          }}
-                        >
-                          ↻ More traits
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  <button
+                    key={idea}
+                    onClick={() => (web ? toggleIdea(idea) : submitText(idea))}
+                    style={{
+                      textAlign: 'left', cursor: 'pointer', width: '100%',
+                      padding: '12px 15px', borderRadius: 16,
+                      background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255, 251, 244, 0.95)',
+                      border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
+                      fontFamily: SANS, fontSize: 14, lineHeight: 1.4, color: LOVIFY.ink, fontWeight: sel ? 700 : 400,
+                      display: 'flex', gap: 9, alignItems: 'center',
+                      boxShadow: '0 6px 16px -10px rgba(216,92,28,0.4)',
+                    }}
+                  >
+                    <span style={{ color: LOVIFY.orangeDeep, fontWeight: 800, flexShrink: 0 }}>{sel ? '✓' : '+'}</span>
+                    <span>{idea}</span>
+                  </button>
                 );
               })}
               {web && selectedIdeas.length > 0 && (
                 <div style={{ alignSelf: 'flex-start', padding: '2px 4px 0', fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>
-                  {selectedIdeas.length} selected — add your own below, then tap ↑
+                  {selectedIdeas.length} selected — tap ↑ to continue
                 </div>
               )}
             </motion.div>
+          ) : (
+            <motion.button
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+              onClick={() => setShowIdeas(true)}
+              style={{
+                alignSelf: 'flex-start', cursor: 'pointer', marginTop: 2,
+                padding: '9px 15px', borderRadius: 20,
+                background: LOVIFY.orangeGradientSoft, border: `1.5px solid ${LOVIFY.orange}`,
+                fontFamily: SANS, fontSize: 13.5, fontWeight: 800, color: LOVIFY.orangeDeep,
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                boxShadow: '0 6px 16px -10px rgba(216,92,28,0.5)',
+              }}
+            >
+              <span style={{ fontSize: 15 }}>✨</span> Help me imagine
+            </motion.button>
           )
+        )}
+
+        {/* Tappable answers live in the transcript now (under the bot's question)
+            so the bottom text bar can stay put on every step. They read as quick
+            replies; the user can tap one OR type their own below. */}
+        {mode === 'about' && (
+          <>
+            <ChoiceList hint={!web}>
+              {web
+                ? ABOUT_OPTIONS_WEB.map((o) => (
+                    <Choice key={o.key} onClick={() => chooseAbout(o.key, `${o.e}  ${o.l}`)}>{o.e}  {o.l}</Choice>
+                  ))
+                : ABOUT_OPTIONS.map((o) => (
+                    <Choice key={o.l} onClick={() => chooseAbout(o.l)}>{o.e}  {o.l}</Choice>
+                  ))}
+            </ChoiceList>
+            {/* Web: a quiet nudge directly under the chips → the input below, so
+                "type your own" reads as the conversation continuing toward the box. */}
+            {web && (
+              <div style={{ alignSelf: 'flex-start', padding: '4px 6px 0', fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: LOVIFY.subSoft }}>
+                Or type your own in the box below 👇
+              </div>
+            )}
+          </>
         )}
 
         {mode === 'soundLoading' && (
@@ -1081,10 +973,8 @@ export function V3_Chat({
             the chips above are shortcuts. */}
         {!revealed && textBarActive && (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 9 }}>
-            {/* Auto-growing textarea: long answers wrap DOWN (up to ~4 lines)
-                instead of scrolling out of view in a one-line input — users
-                couldn't see what they were typing mid-vent. Enter still sends;
-                Shift+Enter makes a new line. */}
+            {/* Auto-growing textarea: long answers wrap DOWN instead of
+                scrolling out of view. Enter sends; Shift+Enter newlines. */}
             <textarea
               ref={inputRef}
               value={draft}
@@ -1132,6 +1022,7 @@ export function V3_Chat({
             onAdd={addStagedFace}
             onRemove={removeStagedFace}
             onDone={confirmPhotos}
+            onSkip={skipPhoto}
           />
         )}
 
@@ -1317,8 +1208,7 @@ function RevealProgress({ done }: { done: boolean }) {
   );
 }
 
-// Crisp SVG play/pause — the '▶' character renders as a blue emoji glyph on
-// iOS, which looked broken on the song rows.
+// Crisp SVG play/pause — the '▶' character renders as a blue emoji on iOS.
 function PlayGlyph() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginLeft: 2 }} aria-hidden>
@@ -1335,8 +1225,7 @@ function PauseGlyph() {
   );
 }
 
-// Animated equalizer for the song-generation wait — the downtime should feel
-// like a studio working, not a stalled page.
+// Animated equalizer for the song-generation wait.
 function RevealEQ() {
   const bars = [14, 26, 18, 34, 22, 38, 20, 30, 16, 28, 19, 24];
   return (
@@ -1395,9 +1284,8 @@ function ChatReveal({
     if (!a || !songReady) return;
     if (playing === n) { a.pause(); setPlaying(null); restoreRevealAmbient(); return; }
     duckRevealAmbient();
-    // Optimistic: flip the UI immediately (iOS resolves play() late, which
-    // previously read as "I tapped and nothing happened"); if play is refused,
-    // reload the element and retry once before giving up.
+    // Optimistic: flip the UI immediately (iOS resolves play() late); retry
+    // once via load() if refused.
     setPlaying(n);
     setPlayedAny(true);
     const p = a.play();
@@ -1417,8 +1305,7 @@ function ChatReveal({
         <div style={{ marginTop: 4, fontFamily: SANS, fontSize: 13.5, fontWeight: songReady ? 700 : 500, color: songFailed ? LOVIFY.sub : songReady ? LOVIFY.orangeDeep : LOVIFY.sub }}>{sub}</div>
       </div>
 
-      {/* Progress bar while the song + vision are being created — with a live
-          equalizer so the wait feels like a studio at work, not dead air. */}
+      {/* Progress bar + live equalizer while the song is being created. */}
       {(songWorking || songReady) && <RevealProgress done={songReady} />}
       {songWorking && <RevealEQ />}
 
@@ -1530,7 +1417,6 @@ function ChatReveal({
           {songFailed ? '' : songWorking ? 'Hang tight — building your vision + song…' : 'Tap play to listen, then Save the one you love'}
         </span>
       </div>
-
     </motion.div>
   );
 }
@@ -1567,14 +1453,14 @@ function Choice({ children, onClick, sub }: { children: React.ReactNode; onClick
 }
 
 // ── Inline multi-photo picker (you + partner / family / friends) ──
-// No skip: the photo is required — the next step puts THEM in their vision.
 function PhotoInput({
-  faces, onAdd, onRemove, onDone,
+  faces, onAdd, onRemove, onDone, onSkip,
 }: {
   faces: string[];
   onAdd: (face: string) => void;
   onRemove: (i: number) => void;
   onDone: () => void;
+  onSkip: () => void;
 }) {
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1618,8 +1504,6 @@ function PhotoInput({
           fontFamily: SANS, fontSize: 15, fontWeight: 800,
           boxShadow: faces.length ? 'none' : '0 12px 26px -12px rgba(216,92,28,0.6)',
         }}>
-          {/* No `capture` attr: on iOS it forces the camera; without it the
-              user gets the full sheet (Photo Library / Take Photo / Choose). */}
           <input type="file" accept="image/*" multiple onChange={handle} style={{ display: 'none' }} />
           <span style={{ fontSize: 18 }}>📷</span> {faces.length === 0 ? 'Add my photo' : 'Add someone else'}
         </label>
@@ -1643,8 +1527,8 @@ function PhotoInput({
 
 // Offline fallback vibes (only used if suggest-song-styles can't run).
 const FALLBACK_VIBES: SoundVibe[] = [
-  { name: 'Comeback Anthem', description: 'Starts low and quiet, builds to a triumphant, fists-up chorus.', genre: 'pop', emoji: '🔥' },
-  { name: 'Rise-Up Pop', description: 'Bright, driving production with soaring, hopeful vocals.', genre: 'pop', emoji: '👑' },
-  { name: 'Soulful Redemption', description: 'Smooth keys and lush harmonies that turn pain into power.', genre: 'r-n-b', emoji: '🌙' },
-  { name: 'Cinematic Comeback', description: 'Sweeping strings building from darkness to a triumphant swell.', genre: 'cinematic', emoji: '🎻' },
+  { name: 'Uplifting Pop Anthem', description: 'Soaring vocals over bright, modern production.', genre: 'pop', emoji: '👑' },
+  { name: 'Soulful R&B Groove', description: 'Smooth keys, lush harmonies, a deep pocket.', genre: 'r-n-b', emoji: '🌙' },
+  { name: 'Acoustic Folk Story', description: 'Honest lyrics over gentle, earthy instruments.', genre: 'acoustic-folk', emoji: '🪕' },
+  { name: 'Cinematic Inspirational', description: 'Sweeping strings building to a triumphant swell.', genre: 'cinematic', emoji: '🎻' },
 ];
