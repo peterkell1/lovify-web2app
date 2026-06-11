@@ -401,6 +401,9 @@ export function V3_Chat({
 
   const idRef = useRef(persisted?.nextId ?? 0);
   const doneRef = useRef(persisted?.done ?? false);
+  // Collapse the auto-grown textarea back to one line once the draft is sent.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (!draft && inputRef.current) inputRef.current.style.height = 'auto'; }, [draft]);
   const nid = () => `m${idRef.current++}`;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -540,7 +543,7 @@ export function V3_Chat({
       // The method was already taught on the "comeback song" screen — dive in.
       botSay([
         `Nice to meet you, ${fn}.`,
-        `Let's start by getting it out 😤 What are 4 things you hate about your life right now? Tell me in specific detail`,
+        `Let's start by getting it out 😤 What are 4 things that are paining you in your life right now? Tell me in specific detail`,
       ], 'text');
     } else if (phase === 'pain') {
       // Pain → DREAM next (best case first — it's lighter, and the steps feel
@@ -1077,17 +1080,35 @@ export function V3_Chat({
             routes to the right handler for the current step via submitFreeText;
             the chips above are shortcuts. */}
         {!revealed && textBarActive && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <input
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 9 }}>
+            {/* Auto-growing textarea: long answers wrap DOWN (up to ~4 lines)
+                instead of scrolling out of view in a one-line input — users
+                couldn't see what they were typing mid-vent. Enter still sends;
+                Shift+Enter makes a new line. */}
+            <textarea
+              ref={inputRef}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') submitFreeText(); }}
+              rows={1}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                const el = e.target as HTMLTextAreaElement;
+                el.style.height = 'auto';
+                el.style.height = `${Math.min(el.scrollHeight, 124)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  (e.target as HTMLTextAreaElement).style.height = 'auto';
+                  submitFreeText();
+                }
+              }}
               autoFocus
               placeholder={textBarPlaceholder}
               style={{
                 flex: 1, boxSizing: 'border-box', padding: '14px 16px', borderRadius: 22,
                 background: 'rgba(255, 251, 244, 0.9)', border: `1.5px solid ${draft.trim() ? LOVIFY.orange : LOVIFY.line}`,
-                fontFamily: SANS, fontSize: 15, color: LOVIFY.ink, outline: 'none',
+                fontFamily: SANS, fontSize: 15, lineHeight: 1.45, color: LOVIFY.ink, outline: 'none',
+                resize: 'none', overflowY: 'auto', maxHeight: 124,
               }}
             />
             {phase !== 'name' && <MicButton onResult={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)} />}
