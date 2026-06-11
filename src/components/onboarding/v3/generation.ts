@@ -308,10 +308,15 @@ export async function startSong(req: {
 
 /** Poll until the song is ready (or fails / times out). ~5 min max.
  *
- * Mirrors useSongPolling exactly: the status request body MUST be
- * `{ action: 'status', taskId }` (the router 400s otherwise), and a song is
- * "ready" as soon as any returned song has a playable URL — we don't wait for
- * a specific terminal status string (the backend isn't always consistent). */
+ * The status request body MUST be `{ action: 'status', taskId }` (the router
+ * 400s otherwise).
+ *
+ * A song is only "ready" once Mureka returns a PERMANENT `audio_url`. The
+ * `stream_audio_url` (api.mureka.ai/v1/live/stream/…) appears first, while the
+ * song is still rendering, and dies once the stream closes — staging it would
+ * persist a dead URL into the library that 400s on playback. So we keep polling
+ * on a stream-only result and only fall back to the stream URL as a last resort
+ * if we reach a terminal status without ever getting a permanent file. */
 export async function pollSong(
   taskId: string,
   onTick?: (status: string) => void,
@@ -332,16 +337,17 @@ export async function pollSong(
     onTick?.(status || 'generating');
 
     const songs: any[] = Array.isArray(data?.songs) ? data.songs : [];
-    const playable = songs.find((s) => s?.audio_url || s?.stream_audio_url);
+
+    // Only return early on a song that already has the PERMANENT file. A
+    // stream-only result means the song is still rendering — keep polling.
+    const ready = songs.find((s) => s?.audio_url);
+    if (ready) {
+      return { ...ready, audio_url: ready.audio_url } as GeneratedSong;
+    }
 
     const terminal = ['complete', 'completed', 'ready', 'success', 'succeeded', 'done'].includes(status);
-    // Return as soon as we have audio OR a terminal status with at least one song.
-    if (playable) {
-      return {
-        ...playable,
-        audio_url: playable.audio_url || playable.stream_audio_url,
-      } as GeneratedSong;
-    }
+    // Terminal status but still no permanent file — last-resort fall back to the
+    // stream URL so the user gets *a* song rather than a hard failure.
     if (terminal && songs.length) {
       const s = songs[0];
       return { ...s, audio_url: s.audio_url || s.stream_audio_url } as GeneratedSong;
