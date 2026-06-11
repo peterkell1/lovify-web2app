@@ -91,3 +91,5 @@ and add a matching page under `src/app/onboarding/<slug>/`.
 | `npm run build` | Production build |
 | `npm run start` | Run the production build |
 | `npm run lint` | ESLint |
+
+<!-- prod env: RC purchase link switched to production token (rebuild trigger) -->
