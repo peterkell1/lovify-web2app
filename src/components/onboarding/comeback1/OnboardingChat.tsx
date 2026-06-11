@@ -26,12 +26,12 @@ import type { GeneratedSong } from '@/components/onboarding/v3/generation';
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
 
 type Phase =
-  | 'name' | 'about' | 'detail' | 'scene' | 'why'
+  | 'name' | 'detail' | 'scene' | 'why'
   | 'photo' | 'visionScene' | 'sound' | 'voice'
   | 'writing' | 'lyricsReview' | 'generating';
 
 type InputMode =
-  | 'busy' | 'text' | 'about' | 'photo' | 'visionScene' | 'visionText'
+  | 'busy' | 'text' | 'photo' | 'visionScene' | 'visionText'
   | 'soundLoading' | 'sound' | 'voice' | 'writing' | 'lyricsReview';
 
 interface ChatMsg {
@@ -58,144 +58,30 @@ export interface ChatResult {
   title: string;
 }
 
-const ABOUT_OPTIONS = [
-  { e: '🌟', l: 'Who I want to be' },
-  { e: '✨', l: 'Something I want to experience' },
-  { e: '💪', l: 'Overcoming a problem' },
-  { e: '❤️', l: 'Someone I love' },
-];
+// One journey for everyone: dream-or-vent → specific scenes → identity
+// statements. The interview's job is pulling out raw material — exact phrases,
+// specific scenes, "I am ___" lines — that the lyric step reorganizes.
 
-// Web funnel: warmer, improvement-framed labels for the first question. `key`
-// maps back to the internal option above so all the downstream tailoring
-// (reaction / detail question / idea banks) keeps working unchanged.
-const ABOUT_OPTIONS_WEB = [
-  { e: '🌟', l: "Becoming who I'm meant to be", key: 'Who I want to be' },
-  { e: '💪', l: 'Overcoming a big problem', key: 'Overcoming a problem' },
-  { e: '🎯', l: 'Achieving a big goal', key: 'Something I want to experience' },
-  { e: '🧠', l: 'Improving my mindset', key: 'Improving my mindset' },
-];
-
-// The detail question is tailored to what they picked — exactly what the user
-// asked for. {name} is filled with their first name.
-const DETAIL_QUESTION: Record<string, string> = {
-  'Who I want to be': 'Who do you want to be, {name}? Describe it in specific detail — like it\'s already you.',
-  'Something I want to experience': 'What do you want to experience, {name}? Describe it in specific detail.',
-  'Overcoming a problem': 'Imagine you\'ve already beaten it, {name} — what does the best-case version of your life look like now? Describe it in specific detail.',
-  'Someone I love': 'Who\'s this song for — and what do you want them to feel, {name}? Describe it in specific detail.',
-  'Improving my mindset': 'What\'s one thing about how you think or feel that you\'d love to change, {name}?',
-};
-
-const ABOUT_REACTION: Record<string, string> = {
-  'Who I want to be': 'Ooh, I love this one.',
-  'Something I want to experience': 'Yes — let\'s make it real.',
-  'Overcoming a problem': 'I\'ve got you.',
-  'Someone I love': 'That\'s beautiful.',
-  'Improving my mindset': 'I hear you — that\'s a powerful place to start.',
-};
-
-// ── "Help me imagine" idea banks ──────────────────────────────────
-// For users who are low, stuck, or just can't find the words. Tapping an
-// idea sends it forward as their answer. The detail ideas are tailored to
-// what they're making the song about; scene/why are warm, universal starters.
-const DETAIL_IDEAS: Record<string, string[]> = {
-  'Who I want to be': [
-    'Someone calm and confident, who walks into any room feeling enough',
-    'A strong, healthy version of me with energy for the people I love',
-    'Financially free — not stressed about money anymore',
-    'Someone who finally believes in themselves and goes for it',
-    'A present, patient parent my kids feel safe with',
-    'Disciplined and focused — the person who actually follows through',
-  ],
-  'Something I want to experience': [
-    'Waking up in a home by the ocean with nowhere I have to be',
-    'Traveling somewhere new, fully present, no guilt, no rush',
-    'Standing on a stage doing the thing I always dreamed of',
-    'Falling in love and feeling completely safe with someone',
-    'Holding the life I built and realizing I actually made it',
-    'A quiet morning where everything finally feels okay',
-  ],
-  'Overcoming a problem': [
-    'Waking up free from the anxiety that\'s been following me',
-    'Finally past the heartbreak — whole and at peace again',
-    'Stronger than the habit that\'s been holding me back',
-    'Out of debt, breathing easy, in control of my money',
-    'Healed from what happened and proud of how far I\'ve come',
-    'Confident in my body after everything it\'s been through',
-  ],
-  'Someone I love': [
-    'My mom — I want her to know how much she means to me',
-    'My partner — I want them to feel chosen, every day',
-    'My kids — I want them to always feel how loved they are',
-    'A friend going through it — I want them to feel less alone',
-    'Someone I lost — a song to keep them close',
-    'My younger self — everything I wish they\'d heard',
-  ],
-};
-const DETAIL_IDEAS_DEFAULT = [
-  'A version of me that feels calm, confident, and free',
-  'Waking up genuinely excited about my life',
-  'Feeling proud of who I\'ve become',
-  'Surrounded by the people I love, fully present',
-  'Strong, healthy, and full of energy',
-  'Finally at peace with myself',
-];
+// ── "Help me imagine" banks (Q2 scenes / Q3 identity only — Q1 is a free
+// vent/dream; we want their own words first).
 const SCENE_IDEAS = [
-  'Golden morning light, coffee in my hands, total calm',
-  'By the ocean — salt air, waves, nowhere I need to be',
-  'Surrounded by the people I love, everyone laughing',
-  'On a stage, lights up, the crowd on their feet',
-  'In my own home that finally feels like mine',
-  'Driving with the windows down, free and wide open',
+  'On stage, a huge crowd singing along',
+  'Waking up in my dream home',
+  'Traveling the world with the people I love',
+  'My work taking off — everyone sharing it',
+  'Surrounded by family, everyone laughing',
+  'Walking into the event everyone wants to be at',
 ];
+const SCENE_IDEAS_WEB = SCENE_IDEAS;
 const WHY_IDEAS = [
-  'Because I\'ve felt small for too long and I\'m done',
-  'Because the people I love deserve the best version of me',
-  'Because I want to prove to myself that I can',
-  'Because I\'m ready to feel alive again',
-  'Because I\'ve worked so hard — I want to feel it',
-  'Because I want to remember who I really am',
+  'I am magnetic',
+  'I am unstoppable',
+  'I am a force of nature',
+  'I am the embodiment of love',
+  'I am free',
+  'I am living my purpose',
 ];
-
-// Web funnel: shorter, multi-select idea chips (tap a few → Continue). Keyed by
-// the same internal option keys as DETAIL_IDEAS so the selection still routes.
-const DETAIL_IDEAS_WEB: Record<string, string[]> = {
-  'Who I want to be': [
-    'Calm and confident', 'Strong and healthy', 'Financially free',
-    'I believe in myself', 'Present and patient', 'Disciplined and focused',
-  ],
-  'Something I want to experience': [
-    'A home by the ocean', 'Travelling the world', 'On a stage, living my dream',
-    'Deeply in love', 'Proud of what I built', 'Calm, peaceful mornings',
-  ],
-  'Overcoming a problem': [
-    'Free from anxiety', 'Past the heartbreak', 'Stronger than my habits',
-    'Out of debt', 'Healed and proud', 'Confident in my body',
-  ],
-  'Improving my mindset': [
-    'Be kinder to myself', 'Worry & overthink less', 'Believe in myself more',
-    'Stay calm under pressure', 'Stop comparing myself', 'Be more focused',
-  ],
-};
-const DETAIL_IDEAS_DEFAULT_WEB = [
-  'Calm and confident', 'Excited about life', 'Proud of who I am',
-  'Present with loved ones', 'Strong and healthy', 'At peace with myself',
-];
-const SCENE_IDEAS_WEB = [
-  'Golden morning calm', 'By the ocean', 'Surrounded by loved ones',
-  'On a stage', 'In my dream home', 'Windows down, free',
-];
-const WHY_IDEAS_WEB = [
-  "I've felt small too long", 'My loved ones deserve my best', 'To prove I can',
-  'Ready to feel alive', "I've worked so hard for this", 'To remember who I am',
-];
-
-// Web-only overrides for the detail question — more accessible, concrete wording
-// for the abstract paths (people have clarity on what to change / their goal,
-// not on "who they're meant to be"). Falls back to the shared map when absent.
-const DETAIL_QUESTION_WEB: Record<string, string> = {
-  'Who I want to be': 'When you picture the best version of you, what\'s different about your life, {name}?',
-  'Something I want to experience': 'What\'s the big goal or moment you\'re going for, {name}? Describe it like it\'s already happening.',
-};
+const WHY_IDEAS_WEB = WHY_IDEAS;
 
 // ── Vision-scene ideas: concrete IMAGE looks the user can pick after adding
 // their photo, so the generated picture is specific to them (not a generic
@@ -295,6 +181,33 @@ function fill(t: string, name: string): string {
 }
 
 // Tiny offline fallback so the song can still attempt if lyrics fail.
+// "How would Taylor Swift reorganize my words into a song?" — the prompt that
+// produced the gold-standard lyrics in user interviews. The user's exact
+// phrases (especially their "I am ___" lines) ARE the material; if Q1 was a
+// vent, the song lives on the OTHER side of the problem and never sings the
+// problem itself.
+function buildDreamLyricsPrompt(a: { name: string; dream: string; scenes: string; identity: string }): string {
+  return [
+    'Reorganize MY OWN WORDS below into a radio-grade song, the way Taylor Swift would: concrete scenes, conversational lines, real emotional lift. This is MY song — keep my exact phrases wherever possible.',
+    '',
+    'MY RAW MATERIAL (use my words, my images, my names):',
+    `• My dream — or what's been weighing on me: ${a.dream}`,
+    `• The specific scenes of my best life: ${a.scenes}`,
+    `• Who I am in that life (my identity statements): ${a.identity}`,
+    a.name ? `• My name: ${a.name}` : '',
+    '',
+    'RULES:',
+    "• My \"I am ___\" statements are the hooks — weave them in nearly verbatim.",
+    '• If I described a problem, the song is the life on the OTHER side of it — never sing the problem itself, only the life beyond it.',
+    '• Present tense, first person, as if I am already living it.',
+    '• ONE short title hook (2–5 words) repeated in the choruses; one singalong moment (like "whoa-oh-oh").',
+    "• Every concrete image must come from my words — don't invent stock scenes.",
+    '• Structure: [Verse 1] [Pre-Chorus] [Chorus] [Verse 2] [Bridge] [Final Chorus] [Outro] — 30 lines total, 220 words maximum. Count your words; if over, cut lines.',
+    'Never include "download", app-store language, advertising, production notes or commentary — output ONLY the song sections and lyrics.',
+    'Please write my song now.',
+  ].filter((l, i) => l !== '' || i > 0).join('\n');
+}
+
 function fallbackLyrics(detail: string, why: string): string {
   const a = shortQuote(detail) || 'this life I see';
   const b = shortQuote(why) || 'everything I am';
@@ -469,9 +382,6 @@ export function V3_Chat({
 
   // Ideas to show under "Help me imagine" for the current question.
   const currentIdeas = (): string[] => {
-    if (phase === 'detail') return web
-      ? (DETAIL_IDEAS_WEB[data.current.songAbout] || DETAIL_IDEAS_DEFAULT_WEB)
-      : (DETAIL_IDEAS[data.current.songAbout] || DETAIL_IDEAS_DEFAULT);
     if (phase === 'scene') return web ? SCENE_IDEAS_WEB : SCENE_IDEAS;
     if (phase === 'why') return web ? WHY_IDEAS_WEB : WHY_IDEAS;
     return [];
@@ -490,49 +400,39 @@ export function V3_Chat({
     if (phase === 'name') {
       const fn = firstName(value);
       data.current.name = fn;
-      setPhase('about');
-      botSay(
-        web
-          ? [`Hi ${fn}. Nice to meet you.`, 'Tell me — what would make the biggest difference to creating a life that you love?']
-          : [`Love that — hey ${fn}! 🧡`, 'So tell me… what should your first song be about?'],
-        'about',
-      );
+      data.current.songAbout = 'My dream life'; // one journey — no topic picker
+      setPhase('detail');
+      botSay([
+        `Hi ${fn}. Let's help you create a life you love. ✨`,
+        `Do you already have a vision of your dream — or is something bothering you right now? Either way, tell me everything.`,
+      ], 'text');
     } else if (phase === 'detail') {
+      // Q1 answer: a dream OR a vent. A vent tells us exactly what the dream
+      // is — the opposite of the problem (the lyrics prompt encodes this).
       data.current.detail = value;
       setPhase('scene');
-      // The old clipped "quote-back" reads broken on a real, longer answer. On
-      // web, warmly affirm it instead of parroting a fragment.
-      const detailAck = web
-        ? `I love that, ${name} — I can tell this really matters to you. 🔥`
-        : `"${shortQuote(value)}" — I love that.`;
       botSay([
-        detailAck,
-        `Close your eyes for a second, ${name}. Picture it like it's already real… what do you see around you? Where are you?`,
+        `Thank you for sharing that, ${name} — that's exactly what your song is made of. 🔥`,
+        `Now dream BIG with me. Picture the wildest, best version of your life — what's actually happening? Give me the specific scenes: where you are, what you're doing, who's there, what people are saying.`,
       ], 'text');
     } else if (phase === 'scene') {
       data.current.scene = value;
       setPhase('why');
-      botSay([`I can see it. 🌅`, `And why does this matter so much to you, ${name}?`], 'text');
+      botSay([
+        `I can SEE it. 🌟`,
+        `Last one — who ARE you in that life? Finish this a few times: "I am ___". Go as big as you want — this is your song.`,
+      ], 'text');
     } else if (phase === 'why') {
       data.current.why = value;
       setPhase('photo');
       botSay([
-        `That right there — that's the heart of your song.`,
+        `That's the real you talking — and that's the heart of your song.`,
         `Now add a photo of yourself, ${name} — and anyone else you want in the picture (partner, family, friends).`,
       ], 'photo');
     }
   };
 
-  // ── Song-about chosen (chip) or free-typed. `bubble` is what we echo back as
-  // the user's message; `key` selects the tailored reaction/detail question (a
-  // free-typed answer falls back to the generic copy). ──
-  const chooseAbout = (label: string, bubble?: string) => {
-    data.current.songAbout = label;
-    pushUser(bubble ?? label);
-    setPhase('detail');
-    const detailQ = (web && DETAIL_QUESTION_WEB[label]) || DETAIL_QUESTION[label] || 'Describe it in specific detail, {name}.';
-    botSay([fill(ABOUT_REACTION[label] || 'Love it.', name), fill(detailQ, name)], 'text');
-  };
+
 
   // ── Photos: stage one at a time, then confirm the whole set ──
   const addStagedFace = (face: string) => setStagedFaces((f) => [...f, face]);
@@ -608,9 +508,14 @@ export function V3_Chat({
     generateLyrics({
       songAbout: d.songAbout, detailText: d.detail, scene: d.scene, why: d.why,
       style: d.soundStyle, voice: d.voice, genres,
+      promptOverride: buildDreamLyricsPrompt({
+        name: d.name, dream: d.detail, scenes: d.scene, identity: d.why,
+      }),
     })
       .then((res) => {
-        d.lyrics = res.content; d.title = res.title;
+        // Strip any trailing production-note block — Mureka would sing it.
+        d.lyrics = (res.content || '').replace(/\n\[(?:production|note|style note)[^\]]*\][\s\S]*$/i, '').trim();
+        d.title = res.title;
         if (res.style) d.soundStyle = res.style;
       })
       .catch(() => { d.lyrics = fallbackLyrics(d.detail, d.why); d.title = 'Your Song'; })
@@ -667,7 +572,6 @@ export function V3_Chat({
   const submitFreeText = () => {
     const value = draft.trim();
     if (!value) return;
-    if (mode === 'about') { setDraft(''); setShowIdeas(false); chooseAbout(value); return; }
     if (mode === 'sound') { setDraft(''); chooseVibeText(value); return; }
     if (mode === 'voice') { setDraft(''); chooseVoice(value); return; }
     if (mode === 'visionScene' || mode === 'visionText') { chooseVisionText(); return; }
@@ -685,13 +589,12 @@ export function V3_Chat({
   // Steps where the bottom text bar is live. Chip steps (about/sound/voice/
   // visionScene) accept a typed answer too; pure loaders/photo do not.
   const textBarActive =
-    mode === 'text' || mode === 'about' || mode === 'sound' ||
+    mode === 'text' || mode === 'sound' ||
     mode === 'voice' || mode === 'visionScene' || mode === 'visionText';
 
   // Placeholder copy tuned to the step so typing feels intentional, not a fallback.
   const textBarPlaceholder =
     phase === 'name' ? 'Type your name…'
-    : mode === 'about' ? 'Or type what it\'s about…'
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
     : mode === 'visionScene' || mode === 'visionText' ? 'Or describe how you want to look…'
@@ -861,30 +764,6 @@ export function V3_Chat({
               <span style={{ fontSize: 15 }}>✨</span> Help me imagine
             </motion.button>
           )
-        )}
-
-        {/* Tappable answers live in the transcript now (under the bot's question)
-            so the bottom text bar can stay put on every step. They read as quick
-            replies; the user can tap one OR type their own below. */}
-        {mode === 'about' && (
-          <>
-            <ChoiceList hint={!web}>
-              {web
-                ? ABOUT_OPTIONS_WEB.map((o) => (
-                    <Choice key={o.key} onClick={() => chooseAbout(o.key, `${o.e}  ${o.l}`)}>{o.e}  {o.l}</Choice>
-                  ))
-                : ABOUT_OPTIONS.map((o) => (
-                    <Choice key={o.l} onClick={() => chooseAbout(o.l)}>{o.e}  {o.l}</Choice>
-                  ))}
-            </ChoiceList>
-            {/* Web: a quiet nudge directly under the chips → the input below, so
-                "type your own" reads as the conversation continuing toward the box. */}
-            {web && (
-              <div style={{ alignSelf: 'flex-start', padding: '4px 6px 0', fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: LOVIFY.subSoft }}>
-                Or type your own in the box below 👇
-              </div>
-            )}
-          </>
         )}
 
         {mode === 'soundLoading' && (
