@@ -358,3 +358,34 @@ export async function pollSong(
   }
   throw new Error('Song generation timed out');
 }
+
+/** Generate TWO distinct songs for the same brief.
+ *
+ * The UI presents the user with two "versions" to choose between, so we kick
+ * off two INDEPENDENT Mureka generations in parallel. Each `generate-song-router`
+ * task renders one usable song, so two tasks → two genuinely different takes of
+ * the same lyrics/style (not the same file shown twice).
+ *
+ * Resilient by design: if one of the two fails (or times out), we still return
+ * the one that succeeded rather than failing the whole reveal. Only when BOTH
+ * fail do we throw, so the caller can show the retry state. `onTick` reports the
+ * combined status so the existing wait-copy keeps animating. */
+export async function generateTwoSongs(
+  req: { lyrics: string; title: string; style: string; voice: string },
+  onTick?: (status: string) => void,
+): Promise<GeneratedSong[]> {
+  const one = async (): Promise<GeneratedSong> => {
+    const taskId = await startSong(req);
+    return pollSong(taskId, onTick);
+  };
+  const results = await Promise.allSettled([one(), one()]);
+  const songs = results
+    .filter((r): r is PromiseFulfilledResult<GeneratedSong> => r.status === 'fulfilled')
+    .map((r) => r.value);
+  if (!songs.length) {
+    // Both failed — surface the first rejection so the caller shows "try again".
+    const firstError = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    throw firstError?.reason instanceof Error ? firstError.reason : new Error('Song generation failed');
+  }
+  return songs;
+}

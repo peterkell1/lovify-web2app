@@ -23,7 +23,7 @@ import {
 } from './screens';
 import { V3_Chat, type ChatPersist } from './OnboardingChat';
 import {
-  generateVisionWithFace, buildVisionPrompt, startSong as startSongApi, pollSong,
+  generateVisionWithFace, buildVisionPrompt, generateTwoSongs,
   type GeneratedSong,
 } from '@/components/onboarding/v3/generation';
 import { useRouter } from 'next/navigation';
@@ -263,7 +263,8 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
   // the song starts the moment lyrics are ready.
   const [visionUrl, setVisionUrl] = useState<string | null>(null);
   const [visionState, setVisionState] = useState<GenSlot>('idle');
-  const [song, setSong] = useState<GeneratedSong | null>(null);
+  // Two distinct songs (the user picks one to Save). Empty while generating.
+  const [songs, setSongs] = useState<GeneratedSong[]>([]);
   const [songState, setSongState] = useState<GenSlot>('idle');
   const [songStatusLine, setSongStatusLine] = useState('Composing your melody…');
   // Guards keyed by input so we only generate once per distinct request.
@@ -345,39 +346,43 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
     const key = `${title}|${lyrics.slice(0, 80)}`;
     if (songKeyRef.current === key && songState !== 'failed') return; // already generating/done for these lyrics
     songKeyRef.current = key;
-    setSong(null);
+    setSongs([]);
     setSongState('working');
     setSongStatusLine('Composing your melody…');
-    startSongApi({ lyrics, title, style, voice })
-      .then((taskId) => pollSong(taskId, (s) => {
-        if (s === 'tuning') setSongStatusLine('Tuning every word to you…');
-        else if (s === 'streaming') setSongStatusLine('Almost ready…');
-        else setSongStatusLine('Composing your melody…');
-      }))
-      .then((finished) => { setSong(finished); setSongState('done'); })
+    // Kick off TWO independent generations so the two version cards play two
+    // genuinely different takes (not the same file twice).
+    generateTwoSongs({ lyrics, title, style, voice }, (s) => {
+      if (s === 'tuning') setSongStatusLine('Tuning every word to you…');
+      else if (s === 'streaming') setSongStatusLine('Almost ready…');
+      else setSongStatusLine('Composing your melody…');
+    })
+      .then((finished) => { setSongs(finished); setSongState('done'); })
       .catch(() => setSongState('failed'));
   }, [songState]);
 
-  // ── Stage the finished song against the session (Phase 2/4) ──
-  // Once the song is ready, write it (plus the vision) to the funnel session so
-  // the account created at /signup can claim it. Guarded so it stages once per
-  // distinct audio url, even if the vision finishes later or the effect re-runs.
+  // ── Stage the SAVED song against the session (Phase 2/4) ──
+  // The user taps Save on the version they want; stage THAT one (plus the
+  // vision) to the funnel session so the account created at /signup claims their
+  // chosen take. Guarded so it stages once per distinct audio url, even if the
+  // vision finishes later or the effect re-runs.
   const stagedAudioRef = useRef<string | null>(null);
   useEffect(() => {
-    if (songState !== 'done' || !song?.audio_url || !sessionId) return;
-    if (stagedAudioRef.current === song.audio_url) return;
-    stagedAudioRef.current = song.audio_url;
+    if (songState !== 'done' || !sessionId) return;
+    const picked = songs[state.savedVersion ?? 0] ?? songs[0];
+    if (!picked?.audio_url) return;
+    if (stagedAudioRef.current === picked.audio_url) return;
+    stagedAudioRef.current = picked.audio_url;
     stageSong(sessionId, {
-      title: state.lyricsTitle || song.title || 'Your Song',
-      lyrics: state.lyrics || song.lyrics || '',
-      style: state.soundStyle || song.style || '',
+      title: state.lyricsTitle || picked.title || 'Your Song',
+      lyrics: state.lyrics || picked.lyrics || '',
+      style: state.soundStyle || picked.style || '',
       voice: state.voice || '',
-      audioUrl: song.audio_url,
-      imageUrl: song.image_url ?? null,
+      audioUrl: picked.audio_url,
+      imageUrl: picked.image_url ?? null,
       visionUrl,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [songState, song, visionUrl, sessionId]);
+  }, [songState, songs, state.savedVersion, visionUrl, sessionId]);
 
   const next = useCallback(() => {
     setDir(1);
@@ -504,7 +509,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
         persisted={chatRef.current}
         onPersist={(s) => { chatRef.current = s; setChatTick((t) => t + 1); }}
         visionUrl={visionUrl} visionState={visionState}
-        song={song} songState={songState} songStatusLine={songStatusLine}
+        songs={songs} songState={songState} songStatusLine={songStatusLine}
         onPhoto={(face, ctx) => {
           set('photos', [face, null, null, null]);
           // Pre-warm the vision once they've picked their image look, using the
@@ -541,11 +546,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       // price → plan picker.
       case 'paywall_benefits': return <V3_22_Trial
         onNext={next} onBack={back}
-        savedSong={(song || visionUrl) ? {
-          cover: visionUrl || song?.image_url || null,
-          title: song?.title || state.lyricsTitle || 'Your song',
-          version: state.savedVersion,
-        } : null}
+        savedSong={(() => {
+          const picked = songs[state.savedVersion ?? 0] ?? songs[0];
+          return (picked || visionUrl) ? {
+            cover: visionUrl || picked?.image_url || null,
+            title: picked?.title || state.lyricsTitle || 'Your song',
+            version: state.savedVersion,
+          } : null;
+        })()}
       />;
       case 'paywall_7days_free': return <V3_TrialOffer onNext={next} onBack={back} />;
       case 'paywall_reminder': return <V3_TrialReminder onNext={next} onBack={back} />;
@@ -604,7 +612,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       />;
       default: return null;
     }
-  }, [stepIds, step, state, next, back, skip, buyPlan, set, startVisionGen, startSongGen, visionUrl, visionState, song, songState, songStatusLine, playing, navigate, mode, surface]);
+  }, [stepIds, step, state, next, back, skip, buyPlan, set, startVisionGen, startSongGen, visionUrl, visionState, songs, songState, songStatusLine, playing, navigate, mode, surface]);
 
   return (
     <div

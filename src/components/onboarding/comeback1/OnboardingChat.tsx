@@ -288,7 +288,7 @@ export interface ChatPersist {
 
 export function V3_Chat({
   genres, onPhoto, onComplete, onBack, persisted, onPersist,
-  visionUrl, visionState, song, songState, songStatusLine, onSave, web, playing, onToggleSound,
+  visionUrl, visionState, songs, songState, songStatusLine, onSave, web, playing, onToggleSound,
 }: {
   genres: string[];
   // Web funnel surface — lets the chat use funnel-specific copy + a header
@@ -312,7 +312,9 @@ export function V3_Chat({
   // can reveal the vision + song right here once they're ready.
   visionUrl?: string | null;
   visionState?: SlotState;
-  song?: GeneratedSong | null;
+  // The two generated takes (empty while generating). The reveal binds one
+  // <audio> per version so each card plays a genuinely different song.
+  songs?: GeneratedSong[];
   songState?: SlotState;
   songStatusLine?: string;
   // The user saves the take they love → advances to the paywall.
@@ -941,12 +943,12 @@ export function V3_Chat({
         {/* The "wow" moment — vision + songs revealed right inside the chat. */}
         {revealed && (
           <ChatReveal
-            title={song?.title || data.current.title}
+            title={songs?.[0]?.title || data.current.title}
             soundStyle={data.current.soundStyle}
             voice={data.current.voice}
             visionUrl={visionUrl ?? null}
             visionState={visionState ?? 'working'}
-            song={song ?? null}
+            songs={songs ?? []}
             songState={songState ?? 'working'}
             statusLine={songStatusLine ?? 'Composing your melody…'}
             onSave={onSave}
@@ -1305,11 +1307,11 @@ const SONG_WAIT_LINES = [
 ];
 
 function ChatReveal({
-  title, soundStyle, voice, visionUrl, visionState, song, songState, statusLine, onSave, onMedia, web,
+  title, soundStyle, voice, visionUrl, visionState, songs, songState, statusLine, onSave, onMedia, web,
 }: {
   title: string; soundStyle: string; voice: string;
   visionUrl: string | null; visionState: SlotState;
-  song: GeneratedSong | null; songState: SlotState; statusLine: string;
+  songs: GeneratedSong[]; songState: SlotState; statusLine: string;
   onSave?: (version?: number) => void; onMedia?: () => void; web?: boolean;
 }) {
   const [playing, setPlaying] = useState<number | null>(null);
@@ -1324,12 +1326,15 @@ function ChatReveal({
   }, [songWorkingNow]);
   // Web: pulse the play buttons until the user plays a version, then calm down.
   const [playedAny, setPlayedAny] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  // One <audio> per version so each card plays its OWN take (two distinct songs).
+  const audioRefs = useRef<(HTMLAudioElement | null)[]>([]);
   useEffect(() => () => {
-    const a = audioRef.current;
-    if (a && !a.paused) { a.pause(); restoreRevealAmbient(); }
+    audioRefs.current.forEach((a) => { if (a && !a.paused) a.pause(); });
+    restoreRevealAmbient();
   }, []);
-  const songReady = songState === 'done' && !!song?.audio_url;
+  // A specific version is playable once ITS audio has arrived.
+  const versionReady = (n: number) => songState === 'done' && !!songs[n]?.audio_url;
+  const songReady = songState === 'done' && songs.some((s) => s?.audio_url);
   const songWorking = songState === 'working' || songState === 'idle';
   const songFailed = songState === 'failed';
   const heroGradient = 'linear-gradient(160deg, #f6c79b 0%, #e88f4e 55%, #c25c22 100%)';
@@ -1340,9 +1345,11 @@ function ChatReveal({
     ? 'We couldn\'t reach the studio. Check your connection and try again.'
     : songReady ? (title || 'Press play and picture it — this is you, living it.') : statusLine;
   const toggle = (n: number) => {
-    const a = audioRef.current;
-    if (!a || !songReady) return;
+    const a = audioRefs.current[n];
+    if (!a || !versionReady(n)) return;
     if (playing === n) { a.pause(); setPlaying(null); restoreRevealAmbient(); return; }
+    // Pause the other version so only one take plays at a time.
+    audioRefs.current.forEach((other, i) => { if (other && i !== n && !other.paused) other.pause(); });
     duckRevealAmbient();
     // Optimistic: flip the UI immediately (iOS resolves play() late); retry
     // once via load() if refused.
@@ -1435,11 +1442,14 @@ function ChatReveal({
         ))}
       </div>
 
-      {/* Two song version rows */}
+      {/* Two song version rows — each plays its OWN take. */}
       {[0, 1].map((n) => {
         const on = playing === n;
+        const ready = versionReady(n);
+        // This card still rendering its take (the other may already be done).
+        const thisWorking = !ready && !songFailed;
         // Web: draw attention to play until a version is played.
-        const pulse = !!web && songReady && !playedAny && !on;
+        const pulse = !!web && ready && !playedAny && !on;
         return (
           <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.97)', border: `1px solid ${LOVIFY.line}`, boxShadow: '0 10px 24px -16px rgba(58,42,34,0.5)' }}>
             <div style={{ position: 'relative', width: 48, height: 48, flexShrink: 0 }}>
@@ -1452,26 +1462,26 @@ function ChatReveal({
                 />
               )}
               <motion.button
-                onClick={songReady ? () => toggle(n) : undefined}
-                disabled={!songReady}
+                onClick={ready ? () => toggle(n) : undefined}
+                disabled={!ready}
                 aria-label={on ? 'Pause' : 'Play'}
                 animate={pulse ? { scale: [1, 1.09, 1] } : { scale: 1 }}
                 transition={{ duration: 1.5, repeat: pulse ? Infinity : 0, ease: 'easeInOut' }}
-                style={{ position: 'relative', width: 48, height: 48, borderRadius: 24, border: 'none', cursor: songReady ? 'pointer' : 'default', background: songWorking ? 'rgba(166,109,56,0.18)' : LOVIFY.orangeGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: songReady ? '0 8px 20px -8px rgba(216,92,28,0.65)' : 'none' }}
+                style={{ position: 'relative', width: 48, height: 48, borderRadius: 24, border: 'none', cursor: ready ? 'pointer' : 'default', background: thisWorking ? 'rgba(166,109,56,0.18)' : LOVIFY.orangeGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: ready ? '0 8px 20px -8px rgba(216,92,28,0.65)' : 'none' }}
               >
-                {songWorking ? <RevealSpinner small /> : on ? <PauseGlyph /> : <PlayGlyph />}
+                {thisWorking ? <RevealSpinner small /> : on ? <PauseGlyph /> : <PlayGlyph />}
               </motion.button>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: SANS, fontSize: 15, fontWeight: 800, color: LOVIFY.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(song?.title || title || 'Your song')} · Version {n + 1}</div>
+              <div style={{ fontFamily: SANS, fontSize: 15, fontWeight: 800, color: LOVIFY.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(songs[n]?.title || title || 'Your song')} · Version {n + 1}</div>
               {on
                 ? <RevealWave />
-                : <div style={{ fontFamily: SANS, fontSize: 12.5, color: LOVIFY.sub, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{songWorking ? 'Producing your song…' : `${styleLabel} · ${voiceLabel}`}</div>}
+                : <div style={{ fontFamily: SANS, fontSize: 12.5, color: LOVIFY.sub, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{thisWorking ? 'Producing your song…' : `${styleLabel} · ${voiceLabel}`}</div>}
             </div>
             <button
               onClick={() => onSave?.(n)}
-              disabled={!songReady}
-              style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 999, border: 'none', cursor: songReady ? 'pointer' : 'default', background: songReady ? LOVIFY.orangeGradient : 'rgba(166,109,56,0.18)', color: songReady ? '#fff' : LOVIFY.subSoft, fontFamily: SANS, fontSize: 13.5, fontWeight: 800 }}
+              disabled={!ready}
+              style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 999, border: 'none', cursor: ready ? 'pointer' : 'default', background: ready ? LOVIFY.orangeGradient : 'rgba(166,109,56,0.18)', color: ready ? '#fff' : LOVIFY.subSoft, fontFamily: SANS, fontSize: 13.5, fontWeight: 800 }}
             >
               Save
             </button>
@@ -1479,9 +1489,17 @@ function ChatReveal({
         );
       })}
 
-      {song?.audio_url && (
-        <audio ref={audioRef} src={song.audio_url} preload="auto" onEnded={() => { setPlaying(null); restoreRevealAmbient(); }} onError={() => { setPlaying(null); restoreRevealAmbient(); }} />
-      )}
+      {/* One <audio> per version, bound to its own take's URL. */}
+      {[0, 1].map((n) => songs[n]?.audio_url ? (
+        <audio
+          key={n}
+          ref={(el) => { audioRefs.current[n] = el; }}
+          src={songs[n].audio_url}
+          preload="auto"
+          onEnded={() => { setPlaying((p) => (p === n ? null : p)); restoreRevealAmbient(); }}
+          onError={() => { setPlaying((p) => (p === n ? null : p)); restoreRevealAmbient(); }}
+        />
+      ) : null)}
 
       <div style={{ textAlign: 'center', padding: '2px 8px 0', minHeight: 18 }}>
         <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub }}>
