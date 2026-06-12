@@ -34,7 +34,46 @@ const POSTHOG_HOST = (process.env.NEXT_PUBLIC_POSTHOG_HOST as string | undefined
 
 let initialized = false;
 
+// Meta's in-app browser PRE-FETCHES ad landing pages in a hidden webview, and
+// its ad-review bots load them with real browser user-agents. Those loads
+// execute JS, so they used to fire funnel_landed/$pageview and inflate step-1
+// counts ~20x vs actual link clicks (337 "landings" vs 14 clicks on day one).
+// A prefetched page stays document.hidden unless the user really opens it —
+// so when the page loads hidden, we defer init and QUEUE captures until it
+// first becomes visible. Never-opened prefetches send nothing; a prefetch the
+// user does open flushes its queued events the moment it's shown. Pages that
+// load visible (every normal visitor) init immediately, exactly as before.
+let deferredCalls: Array<() => void> | null = null;
+
+/** Queue a call to run after first-visibility init; false = not deferring. */
+function deferUntilVisible(fn: () => void): boolean {
+  if (!deferredCalls) return false;
+  deferredCalls.push(fn);
+  return true;
+}
+
 export function initPostHog(): void {
+  if (initialized) return;
+
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    if (deferredCalls) return; // already armed, waiting for first visibility
+    deferredCalls = [];
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      document.removeEventListener('visibilitychange', onVisible);
+      doInitPostHog();
+      const queued = deferredCalls;
+      deferredCalls = null;
+      queued?.forEach((fn) => { try { fn(); } catch { /* ignore */ } });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return;
+  }
+
+  doInitPostHog();
+}
+
+function doInitPostHog(): void {
   if (initialized) return;
 
   if (!POSTHOG_API_KEY) {
@@ -83,7 +122,8 @@ export function initPostHog(): void {
  * registering nulls there would clobber the landing attribution.
  */
 export function registerAdAttribution(): void {
-  if (!initialized || typeof window === 'undefined') return;
+  if (typeof window === 'undefined') return;
+  if (!initialized) { deferUntilVisible(() => registerAdAttribution()); return; }
   try {
     const p = new URLSearchParams(window.location.search);
     const keys = ['fbclid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
@@ -129,7 +169,7 @@ export function capturePostHogEvent(
   eventName: string,
   properties?: Record<string, unknown>,
 ): void {
-  if (!initialized) return;
+  if (!initialized) { deferUntilVisible(() => capturePostHogEvent(eventName, properties)); return; }
   try {
     posthog.capture(eventName, properties);
   } catch (err) {
