@@ -1550,7 +1550,7 @@ function DemoSongSet({ songs, web, onMedia, onPick }: { songs: DemoSong[]; web?:
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9, duration: 0.4 }}
           style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.3, color: LOVIFY.orangeDeep, textAlign: 'center' }}
         >
-          👇 Tap ▶ to hear each song
+          👇 Tap a song to play it
         </motion.div>
       )}
       {/* Play-only rows — no "Save Song" button. This is a demo of someone
@@ -1605,8 +1605,16 @@ function DemoSongRow({ song, onPick, showPing, onPlay }: { song: DemoSong; onPic
       a.play().then(() => { setPlaying(true); onPlay?.(); }).catch(() => {});
     }
   };
+  // The whole row is the play target — people are wired to tap the big card, not
+  // hunt for a small control. The button inside stops propagation so a tap on it
+  // doesn't toggle twice.
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '12px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.97)', border: `1px solid ${LOVIFY.line}`, boxShadow: '0 10px 24px -16px rgba(58,42,34,0.5)' }}>
+    <div
+      onClick={toggle}
+      role="button"
+      aria-label={playing ? `Pause ${song.title}` : `Play ${song.title}`}
+      style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '12px 14px', borderRadius: 16, cursor: 'pointer', background: 'rgba(255,251,244,0.97)', border: `1.5px solid ${playing ? LOVIFY.orange : LOVIFY.line}`, boxShadow: '0 10px 24px -16px rgba(58,42,34,0.5)' }}
+    >
       <div style={{ position: 'relative', width: 48, height: 48, flexShrink: 0 }}>
         {/* "Ping" ring — an expanding pulse behind the play button to draw the
             eye. Off once any song has been played (showPing) or this one is. */}
@@ -1619,13 +1627,23 @@ function DemoSongRow({ song, onPick, showPing, onPlay }: { song: DemoSong; onPic
           />
         )}
         <motion.button
-          onClick={toggle}
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
           aria-label={playing ? 'Pause' : 'Play'}
           animate={showPing && !playing ? { scale: [1, 1.09, 1] } : { scale: 1 }}
           transition={{ duration: 1.5, repeat: showPing && !playing ? Infinity : 0, ease: 'easeInOut' }}
           style={{ position: 'relative', width: 48, height: 48, borderRadius: 24, border: 'none', cursor: 'pointer', background: LOVIFY.orangeGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px -8px rgba(216,92,28,0.65)' }}
         >
-          <span style={{ color: '#fff', fontSize: 18, marginLeft: playing ? 0 : 2 }}>{playing ? '⏸' : '▶'}</span>
+          {/* Crisp SVG — the '▶'/'⏸' characters render as blue emoji on iOS. */}
+          {playing ? (
+            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden>
+              <rect x="6" y="5" width="4.2" height="14" rx="1.3" fill="#fff" />
+              <rect x="13.8" y="5" width="4.2" height="14" rx="1.3" fill="#fff" />
+            </svg>
+          ) : (
+            <svg width="17" height="17" viewBox="0 0 24 24" style={{ marginLeft: 2 }} aria-hidden>
+              <path d="M8 5.2v13.6c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L9.8 4.2c-.8-.5-1.8.1-1.8 1z" fill="#fff" />
+            </svg>
+          )}
         </motion.button>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -1634,21 +1652,20 @@ function DemoSongRow({ song, onPick, showPing, onPlay }: { song: DemoSong; onPic
           ? <MiniWave />
           : <div style={{ fontFamily: SANS, fontSize: 12.5, color: LOVIFY.sub }}>{song.sub}</div>}
       </div>
-      {onPick && (
-        <motion.button
-          onClick={onPick}
-          animate={{ scale: [1, 1.04, 1] }}
+      {/* Persistent "Tap to play" cue on each unplayed row — people are wired to
+          tap reply chips, so spell out that the song itself is tappable. */}
+      {!playing && (
+        <motion.span
+          aria-hidden
+          animate={{ opacity: [0.6, 1, 0.6] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-          style={{
-            flexShrink: 0, cursor: 'pointer', whiteSpace: 'nowrap',
-            padding: '9px 14px', borderRadius: 999,
-            background: LOVIFY.orangeGradient, border: 'none', color: '#fff',
-            fontFamily: SANS, fontSize: 12.5, fontWeight: 800, lineHeight: 1,
-            boxShadow: '0 8px 18px -8px rgba(216,92,28,0.6)',
-          }}
+          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', fontFamily: SANS, fontSize: 12.5, fontWeight: 800, color: LOVIFY.orangeDeep }}
         >
-          Save Song
-        </motion.button>
+          Tap to play
+          <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>
+            <path d="M8 5.2v13.6c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L9.8 4.2c-.8-.5-1.8.1-1.8 1z" fill={LOVIFY.orangeDeep} />
+          </svg>
+        </motion.span>
       )}
       <audio
         ref={audioRef}
