@@ -346,9 +346,15 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
     const prompt = visionScene
       ? buildVisionPrompt({ songAbout, scene: visionScene, detailText })
       : buildVisionPrompt({ songAbout, scene, detailText });
-    generateVisionWithFace(prompt, face, songAbout || 'Your Vision', '9:16')
-      .then((url) => { setVisionUrl(url); setVisionState('done'); })
-      .catch(() => setVisionState('failed'));
+    // The image model (FAL/nano-banana) can be slow or flaky — a single timeout
+    // used to leave the user staring at the "you, living it" fallback forever.
+    // Retry up to 3 attempts before giving up so a transient miss self-heals.
+    const attempt = (n: number) => {
+      generateVisionWithFace(prompt, face, songAbout || 'Your Vision', '9:16')
+        .then((url) => { setVisionUrl(url); setVisionState('done'); })
+        .catch(() => { if (n < 3) setTimeout(() => attempt(n + 1), 1200); else setVisionState('failed'); });
+    };
+    attempt(1);
   }, [visionState]);
 
   const startSongGen = useCallback((lyrics: string, title: string, style: string, voice: string) => {

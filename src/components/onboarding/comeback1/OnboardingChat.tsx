@@ -721,7 +721,7 @@ export function V3_Chat({
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
     : mode === 'visionScene' || mode === 'visionText' ? 'Or describe how you want to look…'
-    : 'Type or tap 🎤 to speak…';
+    : SPEECH_OK ? 'Type or tap 🎤 to speak…' : 'Type your answer…';
 
   // ── Lyrics confirmed (possibly edited) → start the song + reveal INLINE ──
   const confirmLyrics = () => {
@@ -1115,6 +1115,19 @@ export function V3_Chat({
 // Lets people just TALK their answer instead of typing — great for getting
 // specific detail quickly. Renders nothing where speech isn't supported
 // (some embedded/older browsers); the native app uses its own voice pipeline.
+// Web Speech recognition is unreliable / silent on iOS Safari and inside
+// in-app webviews (Instagram / Facebook browser) — the mic button would render
+// but do absolutely nothing when tapped. Only offer the custom mic where it
+// actually works; everywhere else people use the keyboard's own dictation mic.
+const SPEECH_OK = (() => {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const iOS = /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  if (iOS) return false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+})();
+
 function MicButton({ onResult, disabled }: { onResult: (t: string) => void; disabled?: boolean }) {
   const [listening, setListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1127,7 +1140,7 @@ function MicButton({ onResult, disabled }: { onResult: (t: string) => void; disa
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SR = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
   useEffect(() => () => { keepAliveRef.current = false; try { recRef.current?.stop?.(); } catch { /* ignore */ } }, []);
-  if (!SR) return null;
+  if (!SR || !SPEECH_OK) return null;
   const toggle = () => {
     if (listening) {
       keepAliveRef.current = false;
@@ -1349,10 +1362,25 @@ function ChatReveal({
   const [playedAny, setPlayedAny] = useState(false);
   // One <audio> per version so each card plays its OWN take (two distinct songs).
   const audioRefs = useRef<(HTMLAudioElement | null)[]>([]);
+  // True while a tapped track is mid-buffer, so the row shows feedback instead
+  // of looking frozen during the first few seconds of streaming.
+  const [buffering, setBuffering] = useState<number | null>(null);
   useEffect(() => () => {
     audioRefs.current.forEach((a) => { if (a && !a.paused) a.pause(); });
     restoreRevealAmbient();
   }, []);
+  // Start BUFFERING each take the moment its URL arrives — not on tap — so by
+  // the time the user presses play it's already streaming and starts fast
+  // (it was taking 20-30s because nothing loaded until the tap).
+  const preloadedRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    [0, 1].forEach((n) => {
+      if (songState === 'done' && songs[n]?.audio_url && !preloadedRef.current.has(n)) {
+        const a = audioRefs.current[n];
+        if (a) { try { a.load(); } catch { /* ignore */ } preloadedRef.current.add(n); }
+      }
+    });
+  }, [songState, songs]);
   // A specific version is playable once ITS audio has arrived.
   const versionReady = (n: number) => songState === 'done' && !!songs[n]?.audio_url;
   const songReady = songState === 'done' && songs.some((s) => s?.audio_url);
@@ -1368,10 +1396,12 @@ function ChatReveal({
   const toggle = (n: number) => {
     const a = audioRefs.current[n];
     if (!a || !versionReady(n)) return;
-    if (playing === n) { a.pause(); setPlaying(null); restoreRevealAmbient(); return; }
+    if (playing === n) { a.pause(); setPlaying(null); setBuffering(null); restoreRevealAmbient(); return; }
     // Pause the other version so only one take plays at a time.
     audioRefs.current.forEach((other, i) => { if (other && i !== n && !other.paused) other.pause(); });
     duckRevealAmbient();
+    // If it hasn't buffered enough yet, show the buffering hint until it plays.
+    if (a.readyState < 3) setBuffering(n);
     // Optimistic: flip the UI immediately (iOS resolves play() late); retry
     // once via load() if refused.
     setPlaying(n);
@@ -1469,8 +1499,10 @@ function ChatReveal({
         const ready = versionReady(n);
         // This card still rendering its take (the other may already be done).
         const thisWorking = !ready && !songFailed;
-        // Web: draw attention to play until a version is played.
+        // Web: draw attention to play until a version is played, THEN move the
+        // pulse to Save so the listen → save path is obvious.
         const pulse = !!web && ready && !playedAny && !on;
+        const savePulse = !!web && ready && playedAny;
         return (
           <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.97)', border: `1px solid ${LOVIFY.line}`, boxShadow: '0 10px 24px -16px rgba(58,42,34,0.5)' }}>
             <div style={{ position: 'relative', width: 48, height: 48, flexShrink: 0 }}>
@@ -1496,16 +1528,22 @@ function ChatReveal({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: SANS, fontSize: 15, fontWeight: 800, color: LOVIFY.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(songs[n]?.title || title || 'Your song')} · Version {n + 1}</div>
               {on
-                ? <RevealWave />
+                ? (buffering === n
+                  ? <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.orangeDeep }}>Loading the track… ⏳</div>
+                  : <RevealWave />)
                 : <div style={{ fontFamily: SANS, fontSize: 12.5, color: LOVIFY.sub, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{thisWorking ? 'Producing your song…' : `${styleLabel} · ${voiceLabel}`}</div>}
             </div>
-            <button
+            {/* Once a song is ready AND they've listened, pulse Save so it's
+                obvious that saving is the next step (this is how they keep it). */}
+            <motion.button
               onClick={() => onSave?.(n)}
               disabled={!ready}
-              style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 999, border: 'none', cursor: ready ? 'pointer' : 'default', background: ready ? LOVIFY.orangeGradient : 'rgba(166,109,56,0.18)', color: ready ? '#fff' : LOVIFY.subSoft, fontFamily: SANS, fontSize: 13.5, fontWeight: 800 }}
+              animate={savePulse ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+              transition={{ duration: 1.4, repeat: savePulse ? Infinity : 0, ease: 'easeInOut' }}
+              style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 999, border: 'none', cursor: ready ? 'pointer' : 'default', background: ready ? LOVIFY.orangeGradient : 'rgba(166,109,56,0.18)', color: ready ? '#fff' : LOVIFY.subSoft, fontFamily: SANS, fontSize: 13.5, fontWeight: 800, boxShadow: savePulse ? '0 0 0 3px rgba(216,92,28,0.22), 0 8px 18px -6px rgba(216,92,28,0.6)' : 'none' }}
             >
               Save
-            </button>
+            </motion.button>
           </div>
         );
       })}
@@ -1517,8 +1555,10 @@ function ChatReveal({
           ref={(el) => { audioRefs.current[n] = el; }}
           src={songs[n].audio_url}
           preload="auto"
-          onEnded={() => { setPlaying((p) => (p === n ? null : p)); restoreRevealAmbient(); }}
-          onError={() => { setPlaying((p) => (p === n ? null : p)); restoreRevealAmbient(); }}
+          onPlaying={() => setBuffering((b) => (b === n ? null : b))}
+          onWaiting={() => setBuffering(n)}
+          onEnded={() => { setPlaying((p) => (p === n ? null : p)); setBuffering((b) => (b === n ? null : b)); restoreRevealAmbient(); }}
+          onError={() => { setPlaying((p) => (p === n ? null : p)); setBuffering((b) => (b === n ? null : b)); restoreRevealAmbient(); }}
         />
       ) : null)}
 
