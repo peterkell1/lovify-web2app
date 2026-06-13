@@ -1339,6 +1339,25 @@ export function V3_FeatureChat({ onNext, onBack, web, playing, onToggleSound }: 
             </motion.button>
           </motion.div>
         )}
+        {/* Pick step has no bottom reply chip (you advance by tapping a song's
+            "Save Song" button). Without an explicit prompt people stall here —
+            the single biggest funnel drop — so spell out the next action. */}
+        {pending && pending.who === 'user' && pending.pick && (
+          <motion.div
+            key={`pick-${cursor}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{ alignSelf: 'center', textAlign: 'center', maxWidth: '90%', padding: '2px 0 4px' }}
+          >
+            <motion.span
+              animate={{ scale: [1, 1.04, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ display: 'inline-block', fontFamily: SANS, fontSize: 13.5, fontWeight: 800, color: LOVIFY.orangeDeep }}
+            >
+              👆 Tap “Save Song” on your favorite to keep going
+            </motion.span>
+          </motion.div>
+        )}
       </div>
 
       {/* Footer — only the final "Make mine" once the demo plays out. */}
