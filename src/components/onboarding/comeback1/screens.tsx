@@ -17,14 +17,14 @@ import { suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe }
 import { promptPushPermission } from '@/lib/onesignal';
 import { capturePostHogEvent } from '@/lib/posthog';
 import { requestTrackingPermission } from '@/lib/tracking-consent';
-const kaitlinPhoto = '/assets/onboarding/characters/kaitlin.png';
-const becomeCards = '/assets/onboarding/become-cards.png';
+const kaitlinPhoto = '/assets/onboarding/characters/kaitlin.webp';
+const becomeCards = '/assets/onboarding/become-cards.webp';
 // Roleplay-demo assets — a sample person's uploaded photo, their generated
 // dream vision, and the song cover. Used to ACT OUT a chat session rather than
 // show app screenshots.
-const demoPhoto = '/assets/onboarding/before-photo.png';
-const demoVision = '/assets/onboarding/after-photo.png';
-const demoCover = '/assets/onboarding/album-cover.png';
+const demoPhoto = '/assets/onboarding/before-photo.webp';
+const demoVision = '/assets/onboarding/after-photo.webp';
+const demoCover = '/assets/onboarding/album-cover.webp';
 // Two real demo songs the roleplay "creates" at the end (playable).
 const demoSong1 = '/assets/onboarding/v3/demo-song-1.mp3';
 const demoSong2 = '/assets/onboarding/v3/demo-song-2.mp3';
@@ -32,17 +32,17 @@ const webDemoSong = '/assets/onboarding/v3/web-demo-ten-feet-tall.mp3';
 const webDemoSong2 = '/assets/onboarding/v3/web-demo-ten-feet-tall-v2.mp3';
 // Premium illustrated heroes (Kive.ai) — warm, headphones, dreamy. home-hero is
 // the heart/sway for the landing; hero-float is the arms-wide joyful release.
-const homeHero = '/assets/onboarding/v3/home-hero.png';
+const homeHero = '/assets/onboarding/v3/home-hero.webp';
 // Reveal-beat heroes (backgrounds keyed to transparent): glossy pill, the pill
 // splitting open, a person with music streaming into the ear, and a couple in a
 // glowing circle.
-const heroPill = '/assets/onboarding/v3/hero-pill.png';
-const heroPillBreak = '/assets/onboarding/v3/hero-pillbreak.png';
-const heroListening = '/assets/onboarding/v3/hero-listening.png';
-const heroFamily = '/assets/onboarding/v3/hero-family.png';
-const heroTransform = '/assets/onboarding/v3/hero-transform.png';
-const heroLives = '/assets/onboarding/v3/hero-lives.png';
-const heroDriving = '/assets/onboarding/v3/hero-driving.png';
+const heroPill = '/assets/onboarding/v3/hero-pill.webp';
+const heroPillBreak = '/assets/onboarding/v3/hero-pillbreak.webp';
+const heroListening = '/assets/onboarding/v3/hero-listening.webp';
+const heroFamily = '/assets/onboarding/v3/hero-family.webp';
+const heroTransform = '/assets/onboarding/v3/hero-transform.webp';
+const heroLives = '/assets/onboarding/v3/hero-lives.webp';
+const heroDriving = '/assets/onboarding/v3/hero-driving.webp';
 
 // Every illustration shown during the funnel, in roughly the order it appears.
 // The flow controller eagerly preloads these on mount (web) so each screen's
@@ -175,6 +175,8 @@ export function V3_01_Splash({ onNext, onSignIn, sound = true, onToggleSound }: 
         src={homeHero}
         alt=""
         aria-hidden
+        fetchPriority="high"
+        decoding="async"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
         initial={{ scale: 1.06 }}
         animate={{ scale: 1.16, x: [0, -8, 0], y: [0, -6, 0] }}
