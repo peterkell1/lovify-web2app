@@ -151,13 +151,22 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
   // bundles its assets locally (already instant), so this is web-only.
   useEffect(() => {
     if (mode !== 'web') return;
-    ONBOARDING_PRELOAD_IMAGES.forEach((src) => {
+    // The LANDING hero is prioritized by its own <img fetchPriority="high"> in
+    // the Splash. Preload the REST sequentially, starting after first paint, so
+    // they never compete with the hero for a phone's first bytes on cellular
+    // (firing all of them at once is what made the first screen load half-way).
+    let cancelled = false;
+    const rest = ONBOARDING_PRELOAD_IMAGES.slice(1); // skip homeHero (already loading)
+    const warm = (i: number) => {
+      if (cancelled || i >= rest.length) return;
       const img = new Image();
-      img.src = src;
-      // decode() warms the image so the first paint is instant; ignore failures
-      // (unsupported / already-cached) — the .src assignment alone still caches.
-      img.decode?.().catch(() => {});
-    });
+      img.src = rest[i];
+      const next = () => warm(i + 1);
+      if (img.decode) img.decode().then(next, next);
+      else { img.onload = next; img.onerror = next; }
+    };
+    const t = window.setTimeout(() => warm(0), 600);
+    return () => { cancelled = true; window.clearTimeout(t); };
   }, [mode]);
 
   // ── Restore a saved run (Phase 1: step persistence) ──
