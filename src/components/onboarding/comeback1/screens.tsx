@@ -612,12 +612,12 @@ export function V3_DrugHook({ onNext, onBack, onSkip }: NavProps & { autoAdvance
         </div>
         <motion.div
           style={{ marginTop: 34 }}
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.9, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
         >
           <FloatBreathe>
-            <img src={heroPill} alt="" aria-hidden style={{ width: 230, height: 230, objectFit: 'contain', filter: 'drop-shadow(0 16px 40px rgba(216,92,28,0.32))' }} />
+            <img src={heroPill} alt="" aria-hidden fetchPriority="high" decoding="async" style={{ width: 230, height: 230, objectFit: 'contain', filter: 'drop-shadow(0 16px 40px rgba(216,92,28,0.32))' }} />
           </FloatBreathe>
         </motion.div>
       </div>
