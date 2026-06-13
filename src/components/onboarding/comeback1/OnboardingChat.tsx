@@ -395,6 +395,16 @@ export function V3_Chat({
     return () => { cancelAnimationFrame(r); clearTimeout(t); };
   }, [msgs, mode, revealed, songState, visionUrl]);
 
+  // Re-pin to the newest message whenever the keyboard opens/closes (the visual
+  // viewport resizes), so the question being answered never scrolls out of view.
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const onResize = () => scrollToEnd();
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
+
   // Persist a snapshot up to the parent whenever the conversation changes, so
   // a back-then-forward round trip resumes exactly here.
   useEffect(() => {
@@ -821,6 +831,13 @@ export function V3_Chat({
 
       {/* Transcript */}
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 16px 8px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {/* Spacer pushes a short transcript to the BOTTOM so the latest question
+            sits right above the input (like iMessage). Without this, one or two
+            messages stick to the top and slide behind the header when the
+            keyboard opens — the user can't see the question they're answering.
+            Collapses to nothing once the transcript overflows, so scrolling up
+            still reaches the top. */}
+        <div aria-hidden style={{ marginTop: 'auto' }} />
         {msgs.map((m) => (
           <Bubble key={m.id} msg={m} />
         ))}
@@ -1016,6 +1033,10 @@ export function V3_Chat({
                   submitFreeText();
                 }
               }}
+              // When the keyboard opens, iOS shrinks the viewport — re-pin to the
+              // newest message so the question stays visible above the input.
+              // Several delays cover the keyboard's animation settling.
+              onFocus={() => { scrollToEnd(); [120, 320, 550].forEach((d) => setTimeout(scrollToEnd, d)); }}
               autoFocus
               placeholder={textBarPlaceholder}
               style={{
