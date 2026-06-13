@@ -1151,14 +1151,15 @@ const WEB_DEMO_SCRIPT: DemoEvent[] = [
     'Oh-oh-oh, this is me, this is me',
   ] },
   { who: 'user', reply: "Amazing! Now turn it into a song 🎶" },
-  { who: 'bot', text: "Perfect — I created two songs for you, each with your vision ✨" },
-  { who: 'bot', text: "Listen and save your favorite song below" },
+  { who: 'bot', text: "Perfect — here's an example, with two versions ✨" },
+  { who: 'bot', text: "Have a listen 👇 This one's just a demo — yours will be written about your story." },
   { who: 'bot', songset: WEB_DEMO_SONGS },
-  // Picked via the per-song "I love this one" buttons (pick: true → no bottom chip).
-  { who: 'user', reply: "Saved! ❤️", pick: true },
-  // Yes-ladder — small agreements that build to the paywall.
-  { who: 'bot', text: "Amazing 🙌 Now imagine listening to this and feeling its energy every day." },
-  { who: 'bot', text: "Do you feel like your life would start to improve?" },
+  // Neutral continue (normal bottom chip) — advancing the demo, NOT "saving"
+  // someone else's song.
+  { who: 'user', reply: "Wow, that's beautiful 🤯" },
+  // Yes-ladder — reframed around THEIR song, not this demo track.
+  { who: 'bot', text: "Now imagine a song like that — but written about YOU. About overcoming your struggles and becoming who you're meant to be." },
+  { who: 'bot', text: "If you listened to it every day, do you feel like your life would start to improve?" },
   { who: 'user', reply: "Yes, for sure" },
   { who: 'bot', text: "And that it could help you become a better person?" },
   { who: 'user', reply: "100%" },
@@ -1337,25 +1338,6 @@ export function V3_FeatureChat({ onNext, onBack, web, playing, onToggleSound }: 
               {/* Send-style icon so it reads as an action, not a chat bubble. */}
               <span style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 14, background: LOVIFY.orangeGradient, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 15, boxShadow: '0 4px 10px -4px rgba(216,92,28,0.7)' }}>↑</span>
             </motion.button>
-          </motion.div>
-        )}
-        {/* Pick step has no bottom reply chip (you advance by tapping a song's
-            "Save Song" button). Without an explicit prompt people stall here —
-            the single biggest funnel drop — so spell out the next action. */}
-        {pending && pending.who === 'user' && pending.pick && (
-          <motion.div
-            key={`pick-${cursor}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{ alignSelf: 'center', textAlign: 'center', maxWidth: '90%', padding: '2px 0 4px' }}
-          >
-            <motion.span
-              animate={{ scale: [1, 1.04, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              style={{ display: 'inline-block', fontFamily: SANS, fontSize: 13.5, fontWeight: 800, color: LOVIFY.orangeDeep }}
-            >
-              👆 Tap “Save Song” on your favorite to keep going
-            </motion.span>
           </motion.div>
         )}
       </div>
@@ -1571,8 +1553,11 @@ function DemoSongSet({ songs, web, onMedia, onPick }: { songs: DemoSong[]; web?:
           👇 Tap ▶ to hear each song
         </motion.div>
       )}
-      {/* On web, each row carries a "Save Song" pick button. Rows shimmer in with
-          a stagger so the whole reveal feels alive. */}
+      {/* Play-only rows — no "Save Song" button. This is a demo of someone
+          else's song, so asking the viewer to "save" it makes no sense and was
+          the wrong (and only) way to advance. The demo now continues via the
+          normal bottom reply chip like every other step. Rows shimmer in with a
+          stagger so the whole reveal feels alive. */}
       {songs.map((s, i) => (
         web ? (
           <motion.div
@@ -1581,7 +1566,7 @@ function DemoSongSet({ songs, web, onMedia, onPick }: { songs: DemoSong[]; web?:
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             transition={{ delay: 0.9 + i * 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
-            <DemoSongRow song={s} showPing={showPing} onPlay={() => setAnyPlayed(true)} onPick={onPick} />
+            <DemoSongRow song={s} showPing={showPing} onPlay={() => setAnyPlayed(true)} onPick={undefined} />
           </motion.div>
         ) : (
           <DemoSongRow key={i} song={s} showPing={showPing} onPlay={() => setAnyPlayed(true)} onPick={undefined} />
