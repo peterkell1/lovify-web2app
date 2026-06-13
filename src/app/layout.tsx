@@ -28,8 +28,22 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://demo.trylovify.com"),
   title: "Lovify",
   description: "Your life, your song — Lovify turns your story into music.",
+  // opengraph-image.png / icon.png / apple-icon.png in app/ are auto-detected;
+  // this fills the title + description that show alongside the heart in shares.
+  openGraph: {
+    title: "Lovify",
+    description: "Your life, your song — Lovify turns your story into music.",
+    siteName: "Lovify",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Lovify",
+    description: "Your life, your song — Lovify turns your story into music.",
+  },
 };
 
 // App-like funnel: lock the zoom level. Without maximumScale, iOS zooms in
