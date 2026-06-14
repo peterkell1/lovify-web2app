@@ -11,7 +11,9 @@
 const KEY = 'lov-funnel-offer';
 
 // Day-0 cash per offer funnel (USD), for the purchase_completed value.
-export const OFFER_PRICE: Record<string, number> = { annual99: 99 };
+// 'annual99' = the $89.99/year-charged-upfront (no-trial) funnel. (Key name is
+// just an internal id; the charged price is $89.99.)
+export const OFFER_PRICE: Record<string, number> = { annual99: 89.99 };
 
 /** Mark (or clear) the active offer funnel for this browser. Pass '' to clear. */
 export function setFunnelOffer(offer: string): void {

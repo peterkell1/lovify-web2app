@@ -3946,8 +3946,8 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
               <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 800, color: LOVIFY.orangeDeep, border: `1px solid ${LOVIFY.orange}`, borderRadius: 999, padding: '2px 8px' }}>50% OFF</span>
             </span>
             <span style={{ fontFamily: SANS, color: LOVIFY.ink }}>
-              <s style={{ color: LOVIFY.subSoft, fontWeight: 600 }}>$199</s>{' '}
-              <b style={{ color: LOVIFY.orangeDeep, fontSize: 19 }}>$99</b>
+              <s style={{ color: LOVIFY.subSoft, fontWeight: 600 }}>$179</s>{' '}
+              <b style={{ color: LOVIFY.orangeDeep, fontSize: 19 }}>$89.99</b>
               <span style={{ fontSize: 12.5, color: LOVIFY.sub }}>/yr</span>
             </span>
           </div>
