@@ -368,6 +368,11 @@ export function V3_Chat({
   // True once lyrics are confirmed — the reveal (vision + songs) renders inline
   // at the bottom of the chat. Restored straight to revealed on back-nav.
   const [revealed, setRevealed] = useState(() => !!persisted?.done);
+  // The reveal (song card) renders inline at the moment the song appears. Any
+  // messages added AFTER it — the post-save value bridge — must flow BELOW the
+  // reveal, not above it. Capture the message count at reveal time so the
+  // transcript can be split around the reveal card.
+  const revealIndexRef = useRef<number | null>(persisted?.done ? (persisted?.msgs?.length ?? 0) : null);
 
   // Collected answers (kept in a ref so async generation reads the latest).
   const data = useRef<ChatResult>(persisted?.data ?? {
@@ -398,6 +403,13 @@ export function V3_Chat({
     const t = setTimeout(scrollToEnd, 120);
     return () => { cancelAnimationFrame(r); clearTimeout(t); };
   }, [msgs, mode, revealed, songState, visionUrl]);
+
+  // Capture where the reveal sits in the transcript the first time it appears,
+  // so later (value-bridge) messages render below the song card, not above it.
+  useEffect(() => {
+    if (revealed && revealIndexRef.current === null) revealIndexRef.current = msgs.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealed]);
 
   // Re-pin to the newest message whenever the keyboard opens/closes (the visual
   // viewport resizes), so the question being answered never scrolls out of view.
@@ -883,7 +895,10 @@ export function V3_Chat({
             Collapses to nothing once the transcript overflows, so scrolling up
             still reaches the top. */}
         <div aria-hidden style={{ marginTop: 'auto' }} />
-        {msgs.map((m) => (
+        {/* Before the reveal: the whole conversation. After it: only the
+            messages up to the reveal point — the rest render below the song
+            card (see the post-reveal slice further down). */}
+        {(revealed ? msgs.slice(0, revealIndexRef.current ?? msgs.length) : msgs).map((m) => (
           <Bubble key={m.id} msg={m} />
         ))}
 
@@ -1018,6 +1033,11 @@ export function V3_Chat({
             web={web}
           />
         )}
+
+        {/* Post-reveal messages (the value bridge) flow BELOW the song card. */}
+        {revealed && msgs.slice(revealIndexRef.current ?? msgs.length).map((m) => (
+          <Bubble key={m.id} msg={m} />
+        ))}
 
         {/* Value bridge — the current yes-question's tappable reply. */}
         {mode === 'ladder' && ladderIdx >= 0 && ladderIdx < LADDER.length && (
