@@ -136,6 +136,18 @@ export function registerAdAttribution(): void {
 }
 
 /**
+ * Register the A/B funnel arm ('A' | 'B') as a super-property so EVERY event
+ * this session — landed → … → purchase_completed — carries `funnel_variant`,
+ * which is what lets us break EPC down per arm. Defers like registerAdAttribution
+ * if PostHog hasn't initialized yet (Meta-prefetch deferral).
+ */
+export function registerFunnelVariant(variant: string): void {
+  if (typeof window === 'undefined' || !variant) return;
+  if (!initialized) { deferUntilVisible(() => registerFunnelVariant(variant)); return; }
+  try { posthog.register({ funnel_variant: variant }); } catch { /* ignore */ }
+}
+
+/**
  * Link the anonymous distinct_id to the authenticated user. Call once on
  * sign-in. PostHog merges the anonymous events into the identified person
  * so pre-signup activity stays attached to the user.

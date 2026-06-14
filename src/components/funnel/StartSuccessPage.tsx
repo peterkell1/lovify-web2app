@@ -2,7 +2,8 @@
 import { useEffect } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import { initMetaPixel, trackPixel, getWebAttribution } from '@/lib/metaPixel';
-import { capturePostHogEvent, initPostHog, registerAdAttribution } from '@/lib/posthog';
+import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
+import { readFunnelVariant, variantPrice } from '@/lib/funnelVariant';
 import { readOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
 import { clearSnapshot, clearStoredSessionId } from '@/components/onboarding/v3/session';
 const appStoreBadge = '/assets/app-store-badge.svg';
@@ -66,17 +67,22 @@ export default function StartSuccessPage() {
     // Shared event_id lets Meta dedupe this browser Purchase against the
     // server-side CAPI Purchase (fired from the webhook with fbc/fbp).
     const eventId = getWebAttribution()?.eventId;
+    // Real day-0 cash for this A/B arm: A = $1 trial, B = $49 up front. This is
+    // what makes Purchase value / EPC reflect real money per variant.
+    const variant = readFunnelVariant();
+    const value = variantPrice(variant);
     trackPixel('StartTrial', { value: 0, currency: 'USD' }, eventId);
-    trackPixel('Purchase', { value: 1, currency: 'USD' }, eventId);
+    trackPixel('Purchase', { value, currency: 'USD' }, eventId);
     // PostHog must boot here too — this page is reached by a full redirect
     // from the off-domain RC checkout, so the funnel's init is gone. The
     // session-persisted super-props (fbclid/utm_*) survive in localStorage,
     // so purchase_completed stays attributable to the ad.
     initPostHog();
     registerAdAttribution();
+    registerFunnelVariant(variant);
     capturePostHogEvent('web_trial_started', { surface: 'web' });
     // Canonical conversion event the ads dashboard builds its funnel on.
-    capturePostHogEvent('purchase_completed', { surface: 'web', value: 1, currency: 'USD' });
+    capturePostHogEvent('purchase_completed', { surface: 'web', value, currency: 'USD', funnel_variant: variant });
     // Safety net: claim the staged onboarding song for the just-authenticated
     // user. The email path already claims on the account page (this is a no-op
     // then); the Apple-OAuth path bounces straight here, so it claims now.

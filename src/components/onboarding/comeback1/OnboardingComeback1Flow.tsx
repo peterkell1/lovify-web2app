@@ -18,6 +18,7 @@ import {
   V3_11_LeanedOn, V3_Genres, V3_14_Source, V3_16_Nudge,
   V3_MakeSong,
   V3_22_Trial, V3_TrialOffer, V3_TrialReminder, V3_TrialPrice, V3_23_Paywall,
+  V3_UpfrontPaywall,
   V3_CreateAccount,
   ONBOARDING_PRELOAD_IMAGES,
 } from './screens';
@@ -28,7 +29,8 @@ import {
 } from '@/components/onboarding/v3/generation';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { capturePostHogEvent, initPostHog, registerAdAttribution } from '@/lib/posthog';
+import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
+import { getFunnelVariant } from '@/lib/funnelVariant';
 import { trackPaywallShown, trackPaywallCompleted } from '@/lib/track';
 import { purchaseViaIAP } from '@/lib/iapFlow';
 import { PaymentSheet } from '@/components/onboarding/v3/PaymentSheet';
@@ -64,6 +66,15 @@ const APP_STEP_IDS = [
 //                   attributed via the Meta pixel / CAPI, so it's noise on web)
 //  • daily_nudge  — push-notification opt-in (web has no push here)
 const WEB_OMIT = new Set<string>(['att_tracking', 'review_prompt', 'attribution', 'daily_nudge']);
+
+// Funnel B (EPC split test): a SHORTER web funnel — straight to the magic (make
+// a song), then a single UP-FRONT paywall ($49 today), no $1 trial. Drops the
+// 12 story/quiz screens and collapses the 5 paywalls to one. Keeps the demo
+// (the strongest seller). Funnel A = APP_STEP_IDS minus WEB_OMIT (unchanged).
+const WEB_STEP_IDS_B = [
+  'home', 'hook_imagine_drug', 'demo_chat', 'make_first_song', 'song_chat',
+  'paywall_upfront', 'create_account',
+] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
 
@@ -115,12 +126,22 @@ const initialState: FlowState = {
 // plans) → create account.
 
 export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app' | 'web'; startAt?: string } = {}) {
-  // Active step list for this surface: the full app flow, or the trimmed web
-  // funnel. TOTAL + the switch() both key off this, so adding/removing a screen
-  // is a one-line change to APP_STEP_IDS / WEB_OMIT.
+  // EPC split-test arm — assigned once per browser, persisted, stable for the
+  // whole run (the step list is decided here at step 0 and must not change
+  // mid-flow). App is always 'A'. Web rolls the 50/50 coin (gated by
+  // B_TRAFFIC_SHARE until the upfront RC package is live).
+  const [variant] = useState<'A' | 'B'>(() => (mode === 'web' ? getFunnelVariant() : 'A'));
+
+  // Active step list for this surface/arm: full app flow, the trimmed web funnel
+  // (A), or the shorter upfront funnel (B). TOTAL + the switch() both key off
+  // this, so adding/removing a screen is a one-line change.
   const stepIds = useMemo(
-    () => (mode === 'web' ? APP_STEP_IDS.filter((id) => !WEB_OMIT.has(id)) : (APP_STEP_IDS as readonly string[])),
-    [mode],
+    () => {
+      if (mode !== 'web') return APP_STEP_IDS as readonly string[];
+      if (variant === 'B') return WEB_STEP_IDS_B as readonly string[];
+      return APP_STEP_IDS.filter((id) => !WEB_OMIT.has(id));
+    },
+    [mode, variant],
   );
   const TOTAL = stepIds.length;
 
@@ -138,11 +159,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
     initMetaPixel();
     initPostHog();
     registerAdAttribution();
+    // Stamp the A/B arm on every PostHog event this session, so EPC and the
+    // whole funnel can be broken down per variant.
+    registerFunnelVariant(variant);
     if (!landedRef.current) {
       landedRef.current = true;
-      capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1' });
+      capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1', funnel_variant: variant });
     }
-  }, [mode]);
+  }, [mode, variant]);
 
   // ── Eagerly preload every illustration on mount (web) ──
   // On a phone over cellular, fetching each hero only when its screen mounts
@@ -579,6 +603,17 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       case 'paywall_reminder': return <V3_TrialReminder onNext={next} onBack={back} />;
       case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} />;
       case 'paywall_plans': return <V3_23_Paywall onNext={next} onBack={back} onBuy={buyPlan} />;
+      // Funnel B: the single up-front paywall ($49 today, no trial).
+      case 'paywall_upfront': return <V3_UpfrontPaywall
+        onBack={back} onBuy={buyPlan}
+        savedSong={(() => {
+          const picked = songs[state.savedVersion ?? 0] ?? songs[0];
+          return (picked || visionUrl) ? {
+            cover: visionUrl || picked?.image_url || null,
+            title: picked?.title || state.lyricsTitle || 'Your song',
+          } : null;
+        })()}
+      />;
       // Required account creation so the song saves; then straight into the app.
       // Wired to the app's real Supabase auth (useAuth). The signup/signin
       // analytics (login_completed / signup_completed) fire centrally from

@@ -17,10 +17,18 @@
  */
 const RC_TOKEN = process.env.NEXT_PUBLIC_RC_PURCHASE_LINK_TOKEN as string | undefined;
 
+// Funnel B (EPC split test): the no-trial, charged-up-front annual package.
+// Must match the package identifier created in the RC "Web" offering. Override
+// via env once the package exists; until then this maps to a placeholder so the
+// app builds (Funnel B is gated off — B_TRAFFIC_SHARE = 0 — until the package is
+// live, so no real visitor hits an unmapped checkout).
+const UPFRONT_PACKAGE = (process.env.NEXT_PUBLIC_RC_UPFRONT_PACKAGE as string | undefined) || '$rc_annual_upfront';
+
 // Funnel plan id (from screens.tsx) → RC package lookup key (the "Web" offering).
 const PLAN_TO_PACKAGE: Record<string, string> = {
   yearly_premium_trial: '$rc_annual',
   monthly: '$rc_monthly',
+  yearly_upfront: UPFRONT_PACKAGE,
 };
 
 /** True when a RC purchase-link token is configured (else use the Stripe sheet). */
