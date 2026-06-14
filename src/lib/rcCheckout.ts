@@ -17,10 +17,17 @@
  */
 const RC_TOKEN = process.env.NEXT_PUBLIC_RC_PURCHASE_LINK_TOKEN as string | undefined;
 
+// The /offer funnel's $99/year, charged-immediately (NO trial) package. Must
+// match the package identifier created in the RC "Web" offering; override via
+// env once it exists. Until then it builds (the /offer checkout step just won't
+// resolve a package), which is fine — /offer is a standalone test route.
+const ANNUAL99_PACKAGE = (process.env.NEXT_PUBLIC_RC_ANNUAL99_PACKAGE as string | undefined) || '$rc_annual99';
+
 // Funnel plan id (from screens.tsx) → RC package lookup key (the "Web" offering).
 const PLAN_TO_PACKAGE: Record<string, string> = {
   yearly_premium_trial: '$rc_annual',
   monthly: '$rc_monthly',
+  annual99: ANNUAL99_PACKAGE,
 };
 
 /** True when a RC purchase-link token is configured (else use the Stripe sheet). */

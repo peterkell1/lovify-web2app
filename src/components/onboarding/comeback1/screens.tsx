@@ -3911,6 +3911,67 @@ const TRIAL_BENEFITS: { icon: string; t: string; d: string }[] = [
   { icon: '🔁', t: 'Daily play to rewire your mind', d: 'Press play every day and let the words take hold.' },
   { icon: '↩️', t: 'Cancel any time', d: 'Keep access for the duration you paid for.' },
 ];
+// ─── /offer funnel · $99/year order page with email capture ────────────────
+// Shown after the song reveal: summarize the offer, capture email (so a Lead
+// pixel can fire + abandoners are reachable), then → RC checkout. No trial.
+export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
+  onOrder?: (email: string) => void;
+  savedSong?: { cover: string | null; title: string } | null;
+}) {
+  const [email, setEmail] = useState('');
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  return (
+    <LovScreen>
+      <LovBack onClick={onBack} />
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 22px 18px' }}>
+        <h1 style={{ textAlign: 'center', margin: '6px 0 4px', fontFamily: SERIF, fontWeight: 700, fontSize: 25, color: LOVIFY.ink }}>
+          Almost there — keep your song
+        </h1>
+        <p style={{ textAlign: 'center', margin: '0 0 18px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.45, color: LOVIFY.sub }}>
+          You're one step from saving your custom song forever.
+        </p>
+
+        {/* Order summary */}
+        <div style={{ borderRadius: 18, border: `1px solid ${LOVIFY.line}`, background: 'rgba(255,251,244,0.96)', padding: 16, marginBottom: 14, boxShadow: '0 10px 24px -18px rgba(58,42,34,0.5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            {savedSong?.cover && <img src={savedSong.cover} alt="" style={{ width: 54, height: 54, borderRadius: 11, objectFit: 'cover', border: `1px solid ${LOVIFY.line}` }} />}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 14.5, color: LOVIFY.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }}>{savedSong?.title || 'Your custom song'}</div>
+              <div style={{ fontFamily: SANS, fontSize: 12, color: LOVIFY.orangeDeep, fontWeight: 700 }}>Ready ❤️</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${LOVIFY.line}`, paddingTop: 12 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: SANS, fontWeight: 800, fontSize: 15, color: LOVIFY.ink }}>
+              Lovify Premium
+              <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 800, color: LOVIFY.orangeDeep, border: `1px solid ${LOVIFY.orange}`, borderRadius: 999, padding: '2px 8px' }}>50% OFF</span>
+            </span>
+            <span style={{ fontFamily: SANS, color: LOVIFY.ink }}>
+              <s style={{ color: LOVIFY.subSoft, fontWeight: 600 }}>$199</s>{' '}
+              <b style={{ color: LOVIFY.orangeDeep, fontSize: 19 }}>$99</b>
+              <span style={{ fontSize: 12.5, color: LOVIFY.sub }}>/yr</span>
+            </span>
+          </div>
+          <div style={{ marginTop: 8, fontFamily: SANS, fontSize: 12, color: LOVIFY.sub }}>Billed today · cancel anytime · 30-day money-back guarantee</div>
+        </div>
+
+        {/* Email capture — before the card step, so we keep it + fire a pixel */}
+        <label style={{ display: 'block', fontFamily: SANS, fontSize: 13, fontWeight: 700, color: LOVIFY.ink, marginBottom: 6 }}>Your email address</label>
+        <input
+          type="email" inputMode="email" autoComplete="email" placeholder="you@email.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '14px 15px', borderRadius: 12, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${valid ? LOVIFY.orange : LOVIFY.line}`, fontFamily: SANS, fontSize: 16, color: LOVIFY.ink, outline: 'none' }}
+        />
+        <div style={{ marginTop: 14 }}>
+          <LovPrimary onClick={() => onOrder?.(email.trim())} disabled={!valid}>Create My Song 🎶</LovPrimary>
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 10, fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.inkSoft }}>🛡️ 30-Day Money-Back Guarantee</div>
+        <div style={{ padding: '20px 0 0' }}><TrialProof /></div>
+      </div>
+    </LovScreen>
+  );
+}
+
 export function V3_22_Trial({ onNext, onBack, savedSong }: NavProps & {
   // The song they just saved in the chat (vision graphic + title), so it stays
   // visible on the paywall instead of disappearing after they tap Save.

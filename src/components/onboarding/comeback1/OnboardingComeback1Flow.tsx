@@ -18,6 +18,7 @@ import {
   V3_11_LeanedOn, V3_Genres, V3_14_Source, V3_16_Nudge,
   V3_MakeSong,
   V3_22_Trial, V3_TrialOffer, V3_TrialReminder, V3_TrialPrice, V3_23_Paywall,
+  V3_OrderAnnual99,
   V3_CreateAccount,
   ONBOARDING_PRELOAD_IMAGES,
 } from './screens';
@@ -30,6 +31,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
 import { getFunnelVariant } from '@/lib/funnelVariant';
+import { setFunnelOffer } from '@/lib/funnelOffer';
 import { trackPaywallShown, trackPaywallCompleted } from '@/lib/track';
 import { purchaseViaIAP } from '@/lib/iapFlow';
 import { PaymentSheet } from '@/components/onboarding/v3/PaymentSheet';
@@ -73,6 +75,18 @@ const WEB_OMIT = new Set<string>(['att_tracking', 'review_prompt', 'attribution'
 const WEB_STEP_IDS_B = [
   'home', 'hook_imagine_drug', 'demo_chat', 'make_first_song', 'song_chat',
   'paywall_price', 'create_account',
+] as const;
+
+// The standalone "$99/year upfront" offer funnel (route /offer). The current
+// web flow (make song → hear it), but the 5 $1-trial paywalls are replaced by a
+// single $99/year order page that captures email first, then → RC checkout.
+const WEB_STEP_IDS_ANNUAL99 = [
+  'home', 'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
+  'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
+  'proof_music_negative', 'proof_more_depressed', 'the_turn',
+  'song_ideas', 'demo_chat', 'time', 'time_reassurance', 'when_you_listen',
+  'genres', 'make_first_song', 'song_chat',
+  'order_annual99', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
@@ -124,23 +138,24 @@ const initialState: FlowState = {
 // make-song → song chat → paywall (benefits → 7-days-free → reminder → price →
 // plans) → create account.
 
-export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app' | 'web'; startAt?: string } = {}) {
+export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode?: 'app' | 'web'; startAt?: string; offer?: string } = {}) {
   // EPC split-test arm — assigned once per browser, persisted, stable for the
   // whole run (the step list is decided here at step 0 and must not change
   // mid-flow). App is always 'A'. Web rolls the 50/50 coin (gated by
   // B_TRAFFIC_SHARE until the upfront RC package is live).
   const [variant] = useState<'A' | 'B'>(() => (mode === 'web' ? getFunnelVariant() : 'A'));
 
-  // Active step list for this surface/arm: full app flow, the trimmed web funnel
-  // (A), or the shorter upfront funnel (B). TOTAL + the switch() both key off
-  // this, so adding/removing a screen is a one-line change.
+  // Active step list. The standalone $99/year offer funnel (route /offer) uses
+  // its own list; otherwise full app flow, web A, or web B. TOTAL + the switch()
+  // both key off this.
   const stepIds = useMemo(
     () => {
       if (mode !== 'web') return APP_STEP_IDS as readonly string[];
+      if (offer === 'annual99') return WEB_STEP_IDS_ANNUAL99 as readonly string[];
       if (variant === 'B') return WEB_STEP_IDS_B as readonly string[];
       return APP_STEP_IDS.filter((id) => !WEB_OMIT.has(id));
     },
-    [mode, variant],
+    [mode, variant, offer],
   );
   const TOTAL = stepIds.length;
 
@@ -155,6 +170,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
   const landedRef = useRef(false);
   useEffect(() => {
     if (mode !== 'web') return;
+    // Mark (or clear) the $99 offer funnel for this browser so /start/success —
+    // reached after the off-domain RC redirect — reports the right price/tag.
+    setFunnelOffer(offer === 'annual99' ? 'annual99' : '');
     initMetaPixel();
     initPostHog();
     registerAdAttribution();
@@ -163,9 +181,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
     registerFunnelVariant(variant);
     if (!landedRef.current) {
       landedRef.current = true;
-      capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1', funnel_variant: variant });
+      capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1', funnel_variant: variant, funnel: offer || 'standard' });
     }
-  }, [mode, variant]);
+  }, [mode, variant, offer]);
 
   // ── Eagerly preload every illustration on mount (web) ──
   // On a phone over cellular, fetching each hero only when its screen mounts
@@ -444,7 +462,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
   // → pending_fb_events pipeline that purchaseViaIAP already kicks off.
   // On a non-iOS / web preview device purchaseViaIAP returns {handled:false},
   // so we just advance and the click-through preview still flows.
-  const buyPlan = useCallback(async (planId: string) => {
+  const buyPlan = useCallback(async (planId: string, opts?: { email?: string }) => {
     // Web funnel (web-to-app): redirect to Stripe Checkout (Stripe-first, no
     // account yet). On success Stripe sends the user to /start/success.
     if (mode === 'web') {
@@ -458,6 +476,10 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       // Persist fbc/fbp/event_id server-side now (the _fbp cookie is set by now)
       // so the webhook can fire the deduped Meta CAPI Purchase. Fire-and-forget.
       void saveSessionAttribution(sessionIdRef.current);
+      // The $99 offer funnel captures email BEFORE the card step — persist it to
+      // the session so abandoners (who don't finish RC checkout) are still
+      // reachable for follow-up, and prefill it into the RC checkout.
+      if (opts?.email) void saveSessionProgress(sessionIdRef.current, 'order_annual99', { email: opts.email });
       // Stash the onboarding session id so it survives the full-page redirect —
       // it rides into checkout as the RC App User ID so the webhook claims the
       // staged song + provisions the account for this buyer.
@@ -468,6 +490,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       const rcUrl = buildRcCheckoutUrl({
         appUserId: sessionIdRef.current,
         planId,
+        email: opts?.email,
         redirectUrl: `${window.location.origin}/start/success`,
       });
       if (rcUrl) {
@@ -604,6 +627,22 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       // (which would otherwise skip payment into create_account). A keeps it.
       case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} soloPaywall={variant === 'B'} />;
       case 'paywall_plans': return <V3_23_Paywall onNext={next} onBack={back} onBuy={buyPlan} />;
+      // The $99/year offer funnel's single order page: capture email → fire
+      // Lead pixel + email_captured → RC checkout for the annual99 package.
+      case 'order_annual99': return <V3_OrderAnnual99
+        onBack={back}
+        onOrder={(email: string) => {
+          capturePostHogEvent('email_captured', { flow: 'onboarding_comeback1', funnel: 'annual99' });
+          buyPlan('annual99', { email });
+        }}
+        savedSong={(() => {
+          const picked = songs[state.savedVersion ?? 0] ?? songs[0];
+          return (picked || visionUrl) ? {
+            cover: visionUrl || picked?.image_url || null,
+            title: picked?.title || state.lyricsTitle || 'Your song',
+          } : null;
+        })()}
+      />;
       // Required account creation so the song saves; then straight into the app.
       // Wired to the app's real Supabase auth (useAuth). The signup/signin
       // analytics (login_completed / signup_completed) fire centrally from
