@@ -4,6 +4,7 @@ import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import { initMetaPixel, trackPixel, getWebAttribution } from '@/lib/metaPixel';
 import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
 import { readFunnelVariant, variantPrice } from '@/lib/funnelVariant';
+import { readFunnelOffer, OFFER_PRICE } from '@/lib/funnelOffer';
 import { readOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
 import { clearSnapshot, clearStoredSessionId } from '@/components/onboarding/v3/session';
 const appStoreBadge = '/assets/app-store-badge.svg';
@@ -67,10 +68,13 @@ export default function StartSuccessPage() {
     // Shared event_id lets Meta dedupe this browser Purchase against the
     // server-side CAPI Purchase (fired from the webhook with fbc/fbp).
     const eventId = getWebAttribution()?.eventId;
-    // Real day-0 cash for this A/B arm: A = $1 trial, B = $49 up front. This is
-    // what makes Purchase value / EPC reflect real money per variant.
+    // Real day-0 cash. The standalone $99/year offer funnel reports $99; the
+    // normal funnel reports its A/B arm price ($1). This makes Purchase value /
+    // EPC reflect real money per funnel.
     const variant = readFunnelVariant();
-    const value = variantPrice(variant);
+    const offer = readFunnelOffer();
+    const value = OFFER_PRICE[offer] ?? variantPrice(variant);
+    const funnel = offer || 'standard';
     trackPixel('StartTrial', { value: 0, currency: 'USD' }, eventId);
     trackPixel('Purchase', { value, currency: 'USD' }, eventId);
     // PostHog must boot here too — this page is reached by a full redirect
@@ -82,7 +86,7 @@ export default function StartSuccessPage() {
     registerFunnelVariant(variant);
     capturePostHogEvent('web_trial_started', { surface: 'web' });
     // Canonical conversion event the ads dashboard builds its funnel on.
-    capturePostHogEvent('purchase_completed', { surface: 'web', value, currency: 'USD', funnel_variant: variant });
+    capturePostHogEvent('purchase_completed', { surface: 'web', value, currency: 'USD', funnel_variant: variant, funnel });
     // Safety net: claim the staged onboarding song for the just-authenticated
     // user. The email path already claims on the account page (this is a no-op
     // then); the Apple-OAuth path bounces straight here, so it claims now.
