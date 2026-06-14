@@ -32,6 +32,15 @@ export const VARIANT_PRICE: Record<FunnelVariant, number> = { A: 1, B: 49 };
 export function getFunnelVariant(): FunnelVariant {
   if (typeof window === 'undefined') return 'A';
   try {
+    // Manual override for QA: visit ?variant=B (or ?variant=A) to force an arm
+    // and preview a funnel before it's live, without enabling it for real
+    // traffic. The choice is persisted so it sticks across the whole funnel
+    // even after the param drops off later screens.
+    const forced = new URLSearchParams(window.location.search).get('variant');
+    if (forced === 'A' || forced === 'B') {
+      localStorage.setItem(KEY, forced);
+      return forced;
+    }
     const stored = localStorage.getItem(KEY);
     if (stored === 'A' || stored === 'B') return stored;
     const v: FunnelVariant = Math.random() < B_TRAFFIC_SHARE ? 'B' : 'A';
