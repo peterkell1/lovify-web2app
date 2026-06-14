@@ -601,8 +601,18 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       case 'paywall_7days_free': return <V3_TrialOffer onNext={next} onBack={back} />;
       case 'paywall_reminder': return <V3_TrialReminder onNext={next} onBack={back} />;
       // In Funnel B this is the ONE paywall, so hide its "View all plans" link
-      // (which would otherwise skip payment into create_account). A keeps it.
-      case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} soloPaywall={variant === 'B'} />;
+      // (which would otherwise skip payment into create_account) and show the
+      // "save your song" framing it would otherwise have gotten on the benefits
+      // screen. A keeps the plain price screen unchanged.
+      case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} soloPaywall={variant === 'B'}
+        savedSong={(() => {
+          const picked = songs[state.savedVersion ?? 0] ?? songs[0];
+          return (picked || visionUrl) ? {
+            cover: visionUrl || picked?.image_url || null,
+            title: picked?.title || state.lyricsTitle || 'Your song',
+          } : null;
+        })()}
+      />;
       case 'paywall_plans': return <V3_23_Paywall onNext={next} onBack={back} onBuy={buyPlan} />;
       // Required account creation so the song saves; then straight into the app.
       // Wired to the app's real Supabase auth (useAuth). The signup/signin
