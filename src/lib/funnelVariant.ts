@@ -23,7 +23,7 @@ const KEY = 'lov-funnel-variant';
 // Share of NEW visitors routed to Funnel B. 0 = off (everyone on A). Flip to
 // 0.5 for the 50/50 test — that's the only line to change. Both arms use the
 // same $1 trial, so there's no billing prerequisite to turning it on.
-export const B_TRAFFIC_SHARE = 0;
+export const B_TRAFFIC_SHARE = 0.5;
 
 // Day-0 cash price per arm (USD) for the `purchase_completed` value. Both arms
 // are the $1 trial, so both are 1 (kept as a map so a future pricing test is a
