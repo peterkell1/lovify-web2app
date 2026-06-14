@@ -2,31 +2,33 @@
 /**
  * Funnel A/B assignment for the EPC (earnings-per-visitor) split test.
  *
- *   A = the current funnel ($1 trial → $89.99/yr at day 7).
- *   B = a shorter funnel + a discounted annual charged UP FRONT ($49 today).
+ *   A = the current (long) funnel.
+ *   B = a SHORTER funnel — straight to the song — with the SAME $1 trial offer.
+ *
+ * Clean single-variable test: does a shorter funnel convert better? Same price
+ * on both arms, so no new RC package is needed and the read is unambiguous.
  *
  * Assigned ONCE per browser and persisted, so a visitor stays in their arm
  * across reloads — critical because the funnel's step list is decided at step 0
  * and must never change mid-flow. The arm is registered as a PostHog
  * super-property (`funnel_variant`) so every event — including
- * `purchase_completed` — carries it, which is how we break EPC down per arm.
- *
- * Both arms run at the SAME ad + URL (the split is client-side), so CAC is
- * identical across them and the EPC delta is a clean read.
+ * `purchase_completed` — carries it, which is how we break the funnel down per
+ * arm. Both arms run at the SAME ad + URL (the split is client-side), so CAC is
+ * identical and the comparison is clean.
  */
 export type FunnelVariant = 'A' | 'B';
 
 const KEY = 'lov-funnel-variant';
 
-// Share of NEW visitors routed to Funnel B. Keep at 0 until the upfront
-// RevenueCat package is live (otherwise B's checkout has no package to charge);
-// then flip to 0.5 for the real 50/50 test. This is the ONLY line to change to
-// turn the experiment on — no logic redeploy needed.
+// Share of NEW visitors routed to Funnel B. 0 = off (everyone on A). Flip to
+// 0.5 for the 50/50 test — that's the only line to change. Both arms use the
+// same $1 trial, so there's no billing prerequisite to turning it on.
 export const B_TRAFFIC_SHARE = 0;
 
-// Day-0 cash price per arm (USD). Used as the `purchase_completed` value so EPC
-// reflects real money collected today: A = $1 trial, B = $49 first year up front.
-export const VARIANT_PRICE: Record<FunnelVariant, number> = { A: 1, B: 49 };
+// Day-0 cash price per arm (USD) for the `purchase_completed` value. Both arms
+// are the $1 trial, so both are 1 (kept as a map so a future pricing test is a
+// one-line change).
+export const VARIANT_PRICE: Record<FunnelVariant, number> = { A: 1, B: 1 };
 
 /** Assign (once) or read this browser's funnel arm. SSR-safe (returns 'A'). */
 export function getFunnelVariant(): FunnelVariant {

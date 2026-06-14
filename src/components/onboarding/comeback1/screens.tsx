@@ -4014,7 +4014,7 @@ function TrialProof() {
 }
 
 // ─── Paywall 4 · "7 days for free" price screen (soft paywall) ──
-export function V3_TrialPrice({ onNext, onBack, onBuy }: NavProps & { onBuy?: (planId: string) => void }) {
+export function V3_TrialPrice({ onNext, onBack, onBuy, soloPaywall }: NavProps & { onBuy?: (planId: string) => void; soloPaywall?: boolean }) {
   return (
     <LovScreen>
       <LovBack onClick={onBack} />
@@ -4035,59 +4035,18 @@ export function V3_TrialPrice({ onNext, onBack, onBuy }: NavProps & { onBuy?: (p
       <div style={{ flexShrink: 0, padding: '0 24px 8px', textAlign: 'center' }}>
         <span style={{ fontFamily: SANS, fontSize: 14, fontWeight: 600, color: LOVIFY.inkSoft }}>✓ Just $1 today · cancel anytime</span>
       </div>
-      <div style={{ padding: '12px 24px 14px', flexShrink: 0 }}>
+      <div style={{ padding: '12px 24px 28px', flexShrink: 0 }}>
         <LovPrimary onClick={() => (onBuy ? onBuy('yearly_premium_trial') : onNext?.())}>Start my $1 Week</LovPrimary>
       </div>
-      <div style={{ padding: '0 24px 28px', textAlign: 'center', flexShrink: 0 }}>
-        <button onClick={onNext} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: SANS, fontSize: 14, fontWeight: 700, color: LOVIFY.orangeDeep }}>
-          View all plans
-        </button>
-      </div>
-    </LovScreen>
-  );
-}
-
-// ─── Funnel B paywall · the discounted annual, charged UP FRONT (no trial) ──
-// Single paywall for the EPC split test's short funnel. CTA buys `yearly_upfront`
-// (→ the no-trial RC package). Reuses the saved song + social proof.
-export function V3_UpfrontPaywall({ onBack, onBuy, savedSong }: NavProps & {
-  onBuy?: (planId: string) => void;
-  savedSong?: { cover: string | null; title: string } | null;
-}) {
-  return (
-    <LovScreen>
-      <LovBack onClick={onBack} />
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '12px 0' }}>
-        <div style={{ textAlign: 'center', padding: '0 28px' }}>
-          {savedSong && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
-              {savedSong.cover && (
-                <img src={savedSong.cover} alt="" style={{ width: 54, height: 54, borderRadius: 12, objectFit: 'cover', border: `1px solid ${LOVIFY.line}` }} />
-              )}
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 14.5, color: LOVIFY.ink, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{savedSong.title}</div>
-                <div style={{ fontFamily: SANS, fontSize: 12, color: LOVIFY.orangeDeep, fontWeight: 700 }}>Ready ❤️ — unlock to keep it</div>
-              </div>
-            </div>
-          )}
-          <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: 800, fontSize: 27, letterSpacing: -0.5, color: LOVIFY.ink }}>
-            Get your song now
-          </h1>
-          <p style={{ margin: '12px 0 0', fontFamily: SANS, fontSize: 19, fontWeight: 800, color: LOVIFY.orangeDeep }}>
-            $49 for your first year
-          </p>
-          <p style={{ margin: '5px 0 0', fontFamily: SANS, fontSize: 13, color: LOVIFY.subSoft }}>
-            charged today · renews at $89.99/year · cancel anytime
-          </p>
+      {/* "View all plans" advances to the plan picker — hidden when this is the
+          only paywall (Funnel B), so it can't skip payment. */}
+      {!soloPaywall && (
+        <div style={{ padding: '0 24px 28px', textAlign: 'center', flexShrink: 0, marginTop: -16 }}>
+          <button onClick={onNext} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: SANS, fontSize: 14, fontWeight: 700, color: LOVIFY.orangeDeep }}>
+            View all plans
+          </button>
         </div>
-        <div style={{ padding: '28px 24px 0' }}><TrialProof /></div>
-      </div>
-      <div style={{ flexShrink: 0, padding: '0 24px 8px', textAlign: 'center' }}>
-        <span style={{ fontFamily: SANS, fontSize: 14, fontWeight: 600, color: LOVIFY.inkSoft }}>✓ Keep your song forever · cancel anytime</span>
-      </div>
-      <div style={{ padding: '12px 24px 30px', flexShrink: 0 }}>
-        <LovPrimary onClick={() => onBuy?.('yearly_upfront')}>Get my song now →</LovPrimary>
-      </div>
+      )}
     </LovScreen>
   );
 }

@@ -18,7 +18,6 @@ import {
   V3_11_LeanedOn, V3_Genres, V3_14_Source, V3_16_Nudge,
   V3_MakeSong,
   V3_22_Trial, V3_TrialOffer, V3_TrialReminder, V3_TrialPrice, V3_23_Paywall,
-  V3_UpfrontPaywall,
   V3_CreateAccount,
   ONBOARDING_PRELOAD_IMAGES,
 } from './screens';
@@ -67,13 +66,13 @@ const APP_STEP_IDS = [
 //  • daily_nudge  — push-notification opt-in (web has no push here)
 const WEB_OMIT = new Set<string>(['att_tracking', 'review_prompt', 'attribution', 'daily_nudge']);
 
-// Funnel B (EPC split test): a SHORTER web funnel — straight to the magic (make
-// a song), then a single UP-FRONT paywall ($49 today), no $1 trial. Drops the
-// 12 story/quiz screens and collapses the 5 paywalls to one. Keeps the demo
+// Funnel B (split test): a SHORTER web funnel — straight to the magic (make a
+// song) — with the SAME $1 trial offer as A. Drops the 12 story/quiz screens
+// and collapses the 5 paywalls to the single $1 price screen. Keeps the demo
 // (the strongest seller). Funnel A = APP_STEP_IDS minus WEB_OMIT (unchanged).
 const WEB_STEP_IDS_B = [
   'home', 'hook_imagine_drug', 'demo_chat', 'make_first_song', 'song_chat',
-  'paywall_upfront', 'create_account',
+  'paywall_price', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
@@ -601,19 +600,10 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
       />;
       case 'paywall_7days_free': return <V3_TrialOffer onNext={next} onBack={back} />;
       case 'paywall_reminder': return <V3_TrialReminder onNext={next} onBack={back} />;
-      case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} />;
+      // In Funnel B this is the ONE paywall, so hide its "View all plans" link
+      // (which would otherwise skip payment into create_account). A keeps it.
+      case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} soloPaywall={variant === 'B'} />;
       case 'paywall_plans': return <V3_23_Paywall onNext={next} onBack={back} onBuy={buyPlan} />;
-      // Funnel B: the single up-front paywall ($49 today, no trial).
-      case 'paywall_upfront': return <V3_UpfrontPaywall
-        onBack={back} onBuy={buyPlan}
-        savedSong={(() => {
-          const picked = songs[state.savedVersion ?? 0] ?? songs[0];
-          return (picked || visionUrl) ? {
-            cover: visionUrl || picked?.image_url || null,
-            title: picked?.title || state.lyricsTitle || 'Your song',
-          } : null;
-        })()}
-      />;
       // Required account creation so the song saves; then straight into the app.
       // Wired to the app's real Supabase auth (useAuth). The signup/signin
       // analytics (login_completed / signup_completed) fire centrally from
