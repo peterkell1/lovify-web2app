@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { LOVIFY, SANS, SERIF } from '@/components/onboarding/v3/theme';
 import { LovLogo } from '@/components/onboarding/v3/primitives';
+import { capturePostHogEvent } from '@/lib/posthog';
 import {
   suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe,
 } from '@/components/onboarding/v3/generation';
@@ -33,7 +34,10 @@ type Phase =
 
 type InputMode =
   | 'busy' | 'text' | 'photo' | 'visionScene' | 'visionText'
-  | 'soundLoading' | 'sound' | 'voice' | 'writing' | 'lyricsReview';
+  | 'soundLoading' | 'sound' | 'voice' | 'writing' | 'lyricsReview'
+  // Post-save value bridge: 'ladder' shows the current yes-question chip,
+  // 'ladderEnd' shows the final "Keep my song forever →" CTA into the paywall.
+  | 'ladder' | 'ladderEnd';
 
 interface ChatMsg {
   id: string;
@@ -439,6 +443,47 @@ export function V3_Chat({
 
   const pushUser = (text: string) => setMsgs((m) => [...m, { id: nid(), role: 'user', kind: 'text', text }]);
   const pushUserPhotos = (photos: string[]) => setMsgs((m) => [...m, { id: nid(), role: 'user', kind: 'photoset', photos }]);
+
+  // ── Post-save value bridge (the "yes-ladder") ────────────────────────────
+  // Saving the song used to jump STRAIGHT to the paywall — the single biggest
+  // drop-off. Instead the chat keeps talking for a few beats: small agreements
+  // that frame the value, so they walk into the paywall already sold. Same
+  // pattern the demo chat uses; now in the real flow. The final CTA calls the
+  // parent onSave (→ paywall).
+  const [ladderIdx, setLadderIdx] = useState(-1); // -1 = not started yet
+  const pickedRef = useRef(0);
+  const LADDER: { say: string[]; reply: string }[] = [
+    { say: [
+        `That's YOUR song, ${data.current.name || 'friend'}. 🎶`,
+        `Press play every morning and these words start to rewire who you are. 🌅`,
+        `If you listened to it every day — do you feel your life would start to improve?`,
+      ], reply: 'Yes, for sure' },
+    { say: [`And help you become the person you just described?`], reply: '100%' },
+    { say: [`Even help you create a life you truly love?`], reply: 'Yes 🙌' },
+  ];
+  const handlePick = (n?: number) => {
+    if (ladderIdx >= 0) return; // already in the bridge — ignore extra Save taps
+    pickedRef.current = typeof n === 'number' ? n : 0;
+    pushUser('Saved! ❤️');
+    capturePostHogEvent('value_bridge_shown', { flow: 'onboarding_comeback1' });
+    setLadderIdx(0);
+    botSay(LADDER[0].say, 'ladder');
+  };
+  const answerLadder = () => {
+    const i = ladderIdx;
+    pushUser(LADDER[i].reply);
+    if (i + 1 < LADDER.length) {
+      setLadderIdx(i + 1);
+      botSay(LADDER[i + 1].say, 'ladder');
+    } else {
+      setLadderIdx(LADDER.length);
+      botSay(["That's exactly what Lovify does — one song at a time."], 'ladderEnd');
+    }
+  };
+  const finishLadder = () => {
+    capturePostHogEvent('value_bridge_completed', { flow: 'onboarding_comeback1' });
+    onSave?.(pickedRef.current);
+  };
 
   // ── Kick off the conversation once — but ONLY on a fresh start. When we're
   // restoring a saved conversation, skip the intro so we don't replay it. ──
@@ -968,10 +1013,34 @@ export function V3_Chat({
             songs={songs ?? []}
             songState={songState ?? 'working'}
             statusLine={songStatusLine ?? 'Composing your melody…'}
-            onSave={onSave}
+            onSave={handlePick}
             onMedia={scrollToEnd}
             web={web}
           />
+        )}
+
+        {/* Value bridge — the current yes-question's tappable reply. */}
+        {mode === 'ladder' && ladderIdx >= 0 && ladderIdx < LADDER.length && (
+          <ChoiceList>
+            <Choice onClick={answerLadder}>{LADDER[ladderIdx].reply}</Choice>
+          </ChoiceList>
+        )}
+
+        {/* Value bridge close — the CTA that carries them into the paywall. */}
+        {mode === 'ladderEnd' && (
+          <motion.button
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={finishLadder}
+            style={{
+              alignSelf: 'stretch', marginTop: 4, padding: '15px 16px', borderRadius: 999,
+              border: 'none', cursor: 'pointer', background: LOVIFY.orangeGradient, color: '#fff',
+              fontFamily: SANS, fontSize: 15.5, fontWeight: 800,
+              boxShadow: '0 12px 26px -12px rgba(216,92,28,0.6)',
+            }}
+          >
+            Keep my song forever →
+          </motion.button>
         )}
       </div>
 
