@@ -4014,32 +4014,14 @@ function TrialProof() {
 }
 
 // ─── Paywall 4 · "7 days for free" price screen (soft paywall) ──
-export function V3_TrialPrice({ onNext, onBack, onBuy, soloPaywall, savedSong }: NavProps & { onBuy?: (planId: string) => void; soloPaywall?: boolean; savedSong?: { cover: string | null; title: string } | null }) {
+export function V3_TrialPrice({ onNext, onBack, onBuy, soloPaywall }: NavProps & { onBuy?: (planId: string) => void; soloPaywall?: boolean }) {
   return (
     <LovScreen>
       <LovBack onClick={onBack} />
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '12px 0' }}>
         <div style={{ textAlign: 'center', padding: '0 28px' }}>
-          {/* Funnel B's single paywall ties the $1 to KEEPING the song they
-              just made (Funnel A gets this on its benefits screen instead). */}
-          {soloPaywall && savedSong && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', marginBottom: 16 }}>
-              {savedSong.cover && (
-                <img src={savedSong.cover} alt="" style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', border: `1px solid ${LOVIFY.line}` }} />
-              )}
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 14, color: LOVIFY.ink, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{savedSong.title}</div>
-                <div style={{ fontFamily: SANS, fontSize: 12, color: LOVIFY.orangeDeep, fontWeight: 700 }}>Ready ❤️</div>
-              </div>
-            </div>
-          )}
-          {soloPaywall && (
-            <p style={{ margin: '0 0 8px', fontFamily: SANS, fontSize: 16.5, fontWeight: 800, color: LOVIFY.ink }}>
-              Save your song &amp; listen every day 🎧
-            </p>
-          )}
           <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: 800, fontSize: 28, letterSpacing: -0.5, color: LOVIFY.orangeDeep }}>
-            {soloPaywall ? 'Start for $1' : '7 Days for $1'}
+            7 Days for $1
           </h1>
           <p style={{ margin: '10px 0 0', fontFamily: SANS, fontSize: 16, fontWeight: 600, color: LOVIFY.ink }}>
             then $7.50 per month
