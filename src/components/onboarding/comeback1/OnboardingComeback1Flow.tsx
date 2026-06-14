@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LOVIFY } from '@/components/onboarding/v3/theme';
+import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 const ambientLoop = '/assets/onboarding/v3/ambient-loop.mp3';
 import {
   V3_01_Splash,
@@ -199,6 +199,11 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
   // Web-funnel payment sheet (Apple Pay / card slide-up).
   const [paySheet, setPaySheet] = useState<{ open: boolean; planId: string }>({ open: false, planId: '' });
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Their saved song, kept playable THROUGH the paywall (a floating mini-player
+  // follows them) so they keep feeling it while they decide — instead of the
+  // song going silent the instant they leave the chat.
+  const songPlayerRef = useRef<HTMLAudioElement>(null);
+  const [songPlaying, setSongPlaying] = useState(false);
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
@@ -629,6 +634,29 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
     }
   }, [stepIds, step, state, next, back, skip, buyPlan, set, startVisionGen, startSongGen, visionUrl, visionState, songs, songState, songStatusLine, playing, navigate, mode, surface]);
 
+  // ── Saved song, playable through the paywall ──────────────────────────────
+  const onPaywall = (stepIds[step] || '').startsWith('paywall');
+  const savedSong = useMemo(() => {
+    const picked = songs[state.savedVersion ?? 0] ?? songs[0];
+    return picked?.audio_url ? {
+      audioUrl: picked.audio_url,
+      title: picked.title || state.lyricsTitle || 'Your song',
+      cover: visionUrl || picked.image_url || null,
+    } : null;
+  }, [songs, state.savedVersion, state.lyricsTitle, visionUrl]);
+  const toggleSong = () => {
+    const a = songPlayerRef.current;
+    if (!a) return;
+    if (songPlaying) { a.pause(); return; }
+    try { audioRef.current?.pause(); } catch { /* ignore */ }
+    a.play().catch(() => {});
+    capturePostHogEvent('paywall_song_played', { flow: 'onboarding_comeback1' });
+  };
+  // Pause the song once they leave the paywall (into checkout / account).
+  useEffect(() => {
+    if (!onPaywall && songPlaying) { try { songPlayerRef.current?.pause(); } catch { /* ignore */ } }
+  }, [onPaywall, songPlaying]);
+
   return (
     <div
       style={{
@@ -657,6 +685,19 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
         {/* Persistent ambient soundtrack — survives every step change.
             data-ambient lets the demo song cards duck it while a song plays. */}
         <audio ref={audioRef} src={ambientLoop} loop preload="auto" data-ambient />
+
+        {/* Their saved song — one persistent element at the flow level so it
+            keeps playing as they move benefits → price → plans. */}
+        {savedSong && (
+          <audio
+            ref={songPlayerRef}
+            src={savedSong.audioUrl}
+            preload="auto"
+            onPlay={() => setSongPlaying(true)}
+            onPause={() => setSongPlaying(false)}
+            onEnded={() => setSongPlaying(false)}
+          />
+        )}
 
         <AnimatePresence initial={false} custom={dir} mode="popLayout">
           <motion.div
@@ -703,6 +744,43 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt }: { mode?: 'app
               )}
             </svg>
           </button>
+        )}
+
+        {/* Floating "now playing" mini-player — follows them across the paywall
+            screens so their song keeps playing while they decide. Sits in the
+            top band, centered between the back arrow (left) and music toggle
+            (right), clear of the headings below. */}
+        {onPaywall && savedSong && (
+          <motion.button
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={toggleSong}
+            aria-label={songPlaying ? 'Pause your song' : 'Play your song'}
+            style={{
+              position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 42,
+              display: 'flex', alignItems: 'center', gap: 8, maxWidth: 200,
+              padding: '6px 12px 6px 6px', borderRadius: 999, cursor: 'pointer',
+              background: 'rgba(255,251,244,0.96)', border: `1.5px solid ${songPlaying ? LOVIFY.orange : LOVIFY.line}`,
+              boxShadow: '0 8px 22px -10px rgba(58,42,34,0.55)', backdropFilter: 'blur(6px)',
+            }}
+          >
+            <span style={{ position: 'relative', width: 30, height: 30, borderRadius: 15, flexShrink: 0, overflow: 'hidden', background: LOVIFY.orangeGradient, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {savedSong.cover && <img src={savedSong.cover} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} />}
+              <svg width="13" height="13" viewBox="0 0 24 24" style={{ position: 'relative', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }} aria-hidden>
+                {songPlaying ? (
+                  <>
+                    <rect x="6" y="5" width="4.2" height="14" rx="1.3" fill="#fff" />
+                    <rect x="13.8" y="5" width="4.2" height="14" rx="1.3" fill="#fff" />
+                  </>
+                ) : (
+                  <path d="M8 5.2v13.6c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L9.8 4.2c-.8-.5-1.8.1-1.8 1z" fill="#fff" />
+                )}
+              </svg>
+            </span>
+            <span style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 800, color: LOVIFY.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {songPlaying ? 'Your song' : 'Hear your song'}
+            </span>
+          </motion.button>
         )}
 
         {/* Web-funnel payment sheet — Apple Pay / card slide-up over the phone column.
