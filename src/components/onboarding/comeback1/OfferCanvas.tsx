@@ -1,15 +1,20 @@
 // @ts-nocheck -- preview/QA canvas (not part of the live funnel)
-/* Lovify /offer funnel — review canvas.
- * Renders the WHOLE standalone /offer flow at once in labelled phone frames, in
- * the real step order: landing → song-creation chat → email capture → plan
- * picker → create account → success. The /offer funnel is deliberately short
- * (it skips the long quiz/story arc), so this is the entire thing. Preview/QA
- * only — lives at /offer/canvas. The real funnel is /offer. */
+/* Lovify /offer funnel — review canvas ("v2").
+ * Renders the WHOLE /offer v2 flow at once in labelled phone frames, in real
+ * step order: landing → full persuasion arc (hook → proof → "turn anything into
+ * a song") → make song → song chat (in-chat email + Suno) → save your song
+ * (single offer) → account → success. Cuts the demo, the genre/time quiz, and
+ * the old paywall stack. Preview/QA only — lives at /offer/canvas. */
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
-import { V3_01_Splash, V3_OrderAnnual99, V3_CreateAccount } from './screens';
+import {
+  V3_01_Splash, V3_DrugHook, V3_DrugReveal, V3_Discovery, V3_Science, V3_Achieve,
+  V3_LovifyHelps, V3_05_Promise, V3_04_Story, V3_Referral, V3_Familiarity,
+  V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_SongIdeas, V3_MakeSong,
+  V3_OrderAnnual99, V3_CreateAccount,
+} from './screens';
 import { V3_Chat } from './OnboardingChat';
 import {
   generateVisionWithFace, buildVisionPrompt, startSong, pollSong, type GeneratedSong,
@@ -17,6 +22,20 @@ import {
 import { StartSuccessView } from '@/components/funnel/StartSuccessPage';
 
 const noop = () => {};
+
+// Sample-state wrappers so the tap-to-answer screens render populated.
+function WGoals() {
+  const [v, setV] = useState<string[]>(['best-self', 'life-love']);
+  return <V3_Achieve value={v} setValue={setV} onNext={noop} onBack={noop} />;
+}
+function WReferral() {
+  const [v, setV] = useState('');
+  return <V3_Referral value={v} setValue={setV} onNext={noop} onBack={noop} onSkip={noop} />;
+}
+function WFamiliarity() {
+  const [v, setV] = useState('');
+  return <V3_Familiarity value={v} setValue={setV} onNext={noop} onBack={noop} />;
+}
 
 // A finished song to populate the reward card on the save screens (mirrors what
 // the real flow passes after the song reveal).
@@ -73,11 +92,26 @@ const FRAME_W = 340;
 const FRAME_H = 736;
 
 const SCREENS: { id: string; label: string; node: ReactNode }[] = [
-  { id: '1', label: '1 · Landing (Continue → song chat)', node: <V3_01_Splash onNext={noop} /> },
-  { id: '2', label: '2 · Song chat — Q&A + email + reveal, all in-chat (LIVE)', node: <WChat collectEmail /> },
-  { id: '3', label: '3 · Plan picker ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
-  { id: '4', label: '4 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
-  { id: '5', label: '5 · Success (after RC checkout)', node: <StartSuccessView membership /> },
+  { id: '01', label: '01 · Landing', node: <V3_01_Splash onNext={noop} /> },
+  { id: '02', label: '02 · Hook: imagine a drug', node: <V3_DrugHook onNext={noop} onBack={noop} onSkip={noop} /> },
+  { id: '03', label: '03 · Reveal: it’s music', node: <V3_DrugReveal onNext={noop} onBack={noop} /> },
+  { id: '04', label: '04 · Discovery', node: <V3_Discovery onNext={noop} onBack={noop} /> },
+  { id: '05', label: '05 · Music changes who you become', node: <V3_Science onNext={noop} onBack={noop} /> },
+  { id: '06', label: '06 · What would you like to achieve?', node: <WGoals /> },
+  { id: '07', label: '07 · Lovify can help', node: <V3_LovifyHelps onNext={noop} onBack={noop} /> },
+  { id: '08', label: '08 · Unlock personalized music', node: <V3_05_Promise onNext={noop} onBack={noop} /> },
+  { id: '09', label: '09 · Founder story (trust)', node: <V3_04_Story onNext={noop} onBack={noop} /> },
+  { id: '10', label: '10 · Did a pro refer you?', node: <WReferral /> },
+  { id: '11', label: '11 · How aware of music’s impact?', node: <WFamiliarity /> },
+  { id: '12', label: '12 · Proof: songs got more negative', node: <V3_Proof1 onNext={noop} onBack={noop} /> },
+  { id: '13', label: '13 · Proof: saddest generation', node: <V3_Proof2 onNext={noop} onBack={noop} /> },
+  { id: '14', label: '14 · The turn', node: <V3_WhyBuilt onNext={noop} onBack={noop} /> },
+  { id: '15', label: '15 · Turn anything into a song', node: <V3_SongIdeas onNext={noop} onBack={noop} /> },
+  { id: '16', label: '16 · Make your first song (lead-in)', node: <V3_MakeSong onNext={noop} onBack={noop} /> },
+  { id: '17', label: '17 · Song chat — Q&A + email + reveal (LIVE)', node: <WChat collectEmail /> },
+  { id: '18', label: '18 · Save your song ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
+  { id: '19', label: '19 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
+  { id: '20', label: '20 · Success (after RC checkout)', node: <StartSuccessView membership /> },
 ];
 
 export function OfferCanvas() {
@@ -86,10 +120,10 @@ export function OfferCanvas() {
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div style={{ marginBottom: 22, textAlign: 'center' }}>
           <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: 800, fontSize: 26, letterSpacing: -0.5, color: LOVIFY.ink }}>
-            Lovify · /offer funnel
+            Lovify · /offer funnel (v2)
           </h1>
           <p style={{ margin: '6px 0 0', fontFamily: SANS, fontSize: 14, color: LOVIFY.sub }}>
-            {SCREENS.length} screens · landing → song chat → email → plans → account → success. Every screen is live.
+            {SCREENS.length} screens · landing → persuasion arc → make song → song chat (email in-chat) → save your song → account → success.
           </p>
         </div>
 
