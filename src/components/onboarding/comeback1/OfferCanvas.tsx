@@ -10,7 +10,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import {
-  V3_01_Splash, V3_DrugHook, V3_DrugReveal, V3_Discovery, V3_Science, V3_Achieve,
+  V3_DrugHook, V3_DrugReveal, V3_Discovery, V3_Science, V3_Achieve,
   V3_LovifyHelps, V3_05_Promise, V3_04_Story, V3_Referral, V3_Familiarity,
   V3_Proof1, V3_Proof2, V3_WhyBuilt, V3_SongIdeas, V3_MakeSong,
   V3_OrderAnnual99, V3_CreateAccount,
@@ -92,8 +92,7 @@ const FRAME_W = 340;
 const FRAME_H = 736;
 
 const SCREENS: { id: string; label: string; node: ReactNode }[] = [
-  { id: '01', label: '01 · Landing', node: <V3_01_Splash onNext={noop} /> },
-  { id: '02', label: '02 · Hook: imagine a drug', node: <V3_DrugHook onNext={noop} onBack={noop} onSkip={noop} /> },
+  { id: '01', label: '01 · Hook (opener — loops benefits, no auto-advance, no back)', node: <V3_DrugHook opener onNext={noop} onBack={noop} onSkip={noop} /> },
   { id: '03', label: '03 · Reveal: it’s music', node: <V3_DrugReveal onNext={noop} onBack={noop} /> },
   { id: '04', label: '04 · Discovery', node: <V3_Discovery onNext={noop} onBack={noop} /> },
   { id: '05', label: '05 · Music changes who you become', node: <V3_Science onNext={noop} onBack={noop} /> },
