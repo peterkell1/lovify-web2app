@@ -22,6 +22,20 @@ export function rcWebBillingConfigured(): boolean {
   return !!publicEnv.rcWebBillingKey;
 }
 
+/**
+ * Warm the checkout ahead of the tap: load the (lazy) SDK, configure it, and
+ * fetch + cache the offerings. Call this when the user lands on the order page
+ * so that when they hit "Continue" the purchase opens near-instantly instead of
+ * waiting on the ~1.7MB SDK import + the offerings round-trip. Best-effort.
+ */
+export async function prewarmRcWebBilling(appUserId: string): Promise<void> {
+  if (!publicEnv.rcWebBillingKey || !appUserId) return;
+  try {
+    const purchases = await getPurchases(appUserId);
+    await purchases.getOfferings();
+  } catch { /* best-effort — the real purchase() will surface any error */ }
+}
+
 // Funnel plan id (screens.tsx) → RC package lookup key, in the "Web" offering.
 const PLAN_TO_PACKAGE: Record<string, string> = {
   yearly_premium_trial: '$rc_annual',
