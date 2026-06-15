@@ -434,13 +434,21 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     // The standalone /offer funnel renders with Suno (Kie.ai) for a higher-wow
     // song to justify the upfront price; the live funnels stay on the default.
     const model = offer === 'annual99' ? 'suno' : undefined;
+    // Instant reveal: as each take's stream URL lands (~15s), show + play it
+    // right away instead of waiting ~60s for the permanent file. The permanent
+    // files hot-swap in below (and are what get saved).
+    const streamed: GeneratedSong[] = [];
     generateTwoSongs({ lyrics, title, style, voice, model }, (s) => {
       if (s === 'tuning') setSongStatusLine('Tuning every word to you…');
       else if (s === 'streaming') setSongStatusLine('Almost ready…');
       else setSongStatusLine('Composing your melody…');
+    }, (slot, song) => {
+      streamed[slot] = song;
+      setSongs(streamed.filter(Boolean));
+      setSongState('done'); // reveal now, on the stream
     })
       .then((finished) => {
-        setSongs(finished);
+        setSongs(finished); // hot-swap stream → permanent (the saved files)
         setSongState('done');
         // /offer: deliver on the gate's promise — email them a copy of their
         // song. Fire-and-forget; uses the song hosted on our storage.
@@ -461,6 +469,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     if (songState !== 'done' || !sessionId) return;
     const picked = songs[state.savedVersion ?? 0] ?? songs[0];
     if (!picked?.audio_url) return;
+    // Never stage a streaming song — its URL expires. Wait for the permanent
+    // file to hot-swap in (this effect re-runs when songs update), then stage.
+    if (picked.streaming) return;
     if (stagedAudioRef.current === picked.audio_url) return;
     stagedAudioRef.current = picked.audio_url;
     stageSong(sessionId, {

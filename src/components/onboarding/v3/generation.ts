@@ -300,6 +300,9 @@ export interface GeneratedSong {
   image_url?: string;
   lyrics?: string;
   style?: string;
+  // True while `audio_url` is the (temporary) stream URL — the permanent file is
+  // still rendering. Don't save a streaming song; wait for the permanent swap.
+  streaming?: boolean;
 }
 
 export async function startSong(req: {
@@ -339,7 +342,13 @@ export async function pollSong(
   maxPolls = 90,
   intervalMs = 4000,
   model?: string,
+  // Fired ONCE, the moment a playable stream URL exists (well before the
+  // permanent file) so the reveal can start playing immediately — Suno-style.
+  // The promise still resolves with the PERMANENT file (for saving), which the
+  // caller hot-swaps in. The stream URL expires after rendering, so never save it.
+  onStream?: (song: GeneratedSong) => void,
 ): Promise<GeneratedSong> {
+  let streamFired = false;
   for (let i = 0; i < maxPolls; i++) {
     await new Promise((r) => setTimeout(r, intervalMs));
     let res: Response;
@@ -358,8 +367,18 @@ export async function pollSong(
 
     const songs: any[] = Array.isArray(data?.songs) ? data.songs : [];
 
-    // Only return early on a song that already has the PERMANENT file. A
-    // stream-only result means the song is still rendering — keep polling.
+    // Instant reveal: as soon as a stream URL is available (before the permanent
+    // file), surface it once so the user hears their song in ~15s, not ~60s.
+    if (!streamFired && onStream) {
+      const streaming = songs.find((s) => s?.stream_audio_url && !s?.audio_url);
+      if (streaming) {
+        streamFired = true;
+        onStream({ ...streaming, audio_url: streaming.stream_audio_url, streaming: true } as GeneratedSong);
+      }
+    }
+
+    // Resolve only on the PERMANENT file (it's what gets saved). A stream-only
+    // result means the song is still rendering — keep polling.
     const ready = songs.find((s) => s?.audio_url);
     if (ready) {
       return { ...ready, audio_url: ready.audio_url } as GeneratedSong;
@@ -393,14 +412,17 @@ export async function pollSong(
 export async function generateTwoSongs(
   req: { lyrics: string; title: string; style: string; voice: string; model?: string },
   onTick?: (status: string) => void,
+  // Instant reveal: fired per take (slot 0/1) when its stream URL is ready, so
+  // the caller can show + play it before the permanent files finish.
+  onStream?: (slot: number, song: GeneratedSong) => void,
 ): Promise<GeneratedSong[]> {
-  const one = async (): Promise<GeneratedSong> => {
+  const one = async (slot: number): Promise<GeneratedSong> => {
     const taskId = await startSong(req);
     // Poll the SAME provider that started this task (req.model), else a Suno
     // task would be polled against Mureka's store and never resolve.
-    return pollSong(taskId, onTick, undefined, undefined, req.model);
+    return pollSong(taskId, onTick, undefined, undefined, req.model, onStream ? (s) => onStream(slot, s) : undefined);
   };
-  const results = await Promise.allSettled([one(), one()]);
+  const results = await Promise.allSettled([one(0), one(1)]);
   const songs = results
     .filter((r): r is PromiseFulfilledResult<GeneratedSong> => r.status === 'fulfilled')
     .map((r) => r.value);
