@@ -615,7 +615,7 @@ export function V3_DrugHook({ onNext, onBack, onSkip, opener, sound = true, onTo
         ? <MusicToggle on={sound !== false} onClick={() => onToggleSound?.()} color={LOVIFY.ink} />
         : <LovSkip onClick={onSkip} />}
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 30px', textAlign: 'center' }}>
-        <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: 600, fontSize: 25, lineHeight: 1.3, letterSpacing: -0.5, color: LOVIFY.ink }}>
+        <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: opener ? 800 : 600, fontSize: 25, lineHeight: 1.3, letterSpacing: -0.5, color: LOVIFY.ink }}>
           <RevealWords text="Imagine a" per={0.16} />{' '}
           <LovAccent>drug</LovAccent>{' '}
           <RevealWords text="that could help you…" delay={0.5} per={0.13} />
@@ -628,7 +628,7 @@ export function V3_DrugHook({ onNext, onBack, onSkip, opener, sound = true, onTo
               animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -14, filter: 'blur(8px)' }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              style={{ fontFamily: SANS, fontWeight: 800, fontSize: 22, lineHeight: 1.2, color: LOVIFY.orangeDeep }}
+              style={{ fontFamily: SANS, fontWeight: opener ? 600 : 800, fontSize: 22, lineHeight: 1.2, color: LOVIFY.orangeDeep }}
             >
               {benefits[i]}
             </motion.div>
