@@ -291,14 +291,18 @@ export interface GeneratedSong {
 }
 
 export async function startSong(req: {
-  lyrics: string; title: string; style: string; voice: string;
+  lyrics: string; title: string; style: string; voice: string; model?: string;
 }): Promise<string> {
   const vocalGender = /female|woman|she/i.test(req.voice) ? 'f' : /male|man|he/i.test(req.voice) ? 'm' : undefined;
+  // `model` pins the song provider for THIS funnel (the /offer funnel passes
+  // 'suno' = Kie.ai). The router honors it; omitting it keeps the app_settings
+  // default (Mureka) for the live funnels untouched.
   const res = await authedFetch('generate-song-router', {
     lyrics: req.lyrics,
     title: req.title,
     style: req.style,
     vocalGender,
+    ...(req.model ? { model: req.model } : {}),
   });
   if (!res.ok) throw new Error(`generate-song-router failed (${res.status})`);
   const data = await res.json();
@@ -322,12 +326,16 @@ export async function pollSong(
   onTick?: (status: string) => void,
   maxPolls = 90,
   intervalMs = 4000,
+  model?: string,
 ): Promise<GeneratedSong> {
   for (let i = 0; i < maxPolls; i++) {
     await new Promise((r) => setTimeout(r, intervalMs));
     let res: Response;
     try {
-      res = await authedFetch('generate-song-router', { action: 'status', taskId });
+      // `model` MUST match the provider that started the task — the router uses
+      // it to route the status poll to the same provider (Suno tasks live in a
+      // different store than Mureka's, so a mis-routed poll never resolves).
+      res = await authedFetch('generate-song-router', { action: 'status', taskId, ...(model ? { model } : {}) });
     } catch {
       continue; // transient — keep polling
     }
@@ -371,12 +379,14 @@ export async function pollSong(
  * fail do we throw, so the caller can show the retry state. `onTick` reports the
  * combined status so the existing wait-copy keeps animating. */
 export async function generateTwoSongs(
-  req: { lyrics: string; title: string; style: string; voice: string },
+  req: { lyrics: string; title: string; style: string; voice: string; model?: string },
   onTick?: (status: string) => void,
 ): Promise<GeneratedSong[]> {
   const one = async (): Promise<GeneratedSong> => {
     const taskId = await startSong(req);
-    return pollSong(taskId, onTick);
+    // Poll the SAME provider that started this task (req.model), else a Suno
+    // task would be polled against Mureka's store and never resolve.
+    return pollSong(taskId, onTick, undefined, undefined, req.model);
   };
   const results = await Promise.allSettled([one(), one()]);
   const songs = results

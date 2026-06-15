@@ -4,7 +4,7 @@ import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import { initMetaPixel, trackPixel, getWebAttribution } from '@/lib/metaPixel';
 import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
 import { readFunnelVariant, variantPrice } from '@/lib/funnelVariant';
-import { readFunnelOffer, OFFER_PRICE } from '@/lib/funnelOffer';
+import { readFunnelOffer, OFFER_PRICE, PLAN_DAY0_PRICE, readLastPlan } from '@/lib/funnelOffer';
 import { readOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
 import { clearSnapshot, clearStoredSessionId } from '@/components/onboarding/v3/session';
 const appStoreBadge = '/assets/app-store-badge.svg';
@@ -73,7 +73,9 @@ export default function StartSuccessPage() {
     // EPC reflect real money per funnel.
     const variant = readFunnelVariant();
     const offer = readFunnelOffer();
-    const value = OFFER_PRICE[offer] ?? variantPrice(variant);
+    // Prefer the actual plan's day-0 charge; fall back to the offer/arm price.
+    const plan = readLastPlan();
+    const value = PLAN_DAY0_PRICE[plan] ?? OFFER_PRICE[offer] ?? variantPrice(variant);
     const funnel = offer || 'standard';
     trackPixel('StartTrial', { value: 0, currency: 'USD' }, eventId);
     trackPixel('Purchase', { value, currency: 'USD' }, eventId);

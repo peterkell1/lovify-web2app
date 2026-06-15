@@ -3911,47 +3911,66 @@ const TRIAL_BENEFITS: { icon: string; t: string; d: string }[] = [
   { icon: '🔁', t: 'Daily play to rewire your mind', d: 'Press play every day and let the words take hold.' },
   { icon: '↩️', t: 'Cancel any time', d: 'Keep access for the duration you paid for.' },
 ];
-// ─── /offer funnel · $99/year order page with email capture ────────────────
-// Shown after the song reveal: summarize the offer, capture email (so a Lead
-// pixel can fire + abandoners are reachable), then → RC checkout. No trial.
+// ─── /offer funnel · "save your song" membership order page ─────────────────
+// Shown after the song chat: capture email (so a Lead pixel fires + abandoners
+// stay reachable), pick a plan ($89.99/yr up front or $17.99/mo), → RC checkout.
+const OFFER_PLANS = [
+  { id: 'annual99', name: 'Annual', price: '$89.99', per: '/year', sub: 'Billed today · best value', badge: 'SAVE 58%' },
+  { id: 'monthly', name: 'Monthly', price: '$17.99', per: '/month', sub: 'Billed today · cancel anytime', badge: '' },
+] as const;
 export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
-  onOrder?: (email: string) => void;
+  onOrder?: (email: string, planId: string) => void;
   savedSong?: { cover: string | null; title: string } | null;
 }) {
   const [email, setEmail] = useState('');
+  const [plan, setPlan] = useState<string>('annual99');
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   return (
     <LovScreen>
       <LovBack onClick={onBack} />
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 22px 18px' }}>
         <h1 style={{ textAlign: 'center', margin: '6px 0 4px', fontFamily: SERIF, fontWeight: 700, fontSize: 25, color: LOVIFY.ink }}>
-          Almost there — keep your song
+          Save your song
         </h1>
-        <p style={{ textAlign: 'center', margin: '0 0 18px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.45, color: LOVIFY.sub }}>
-          You're one step from saving your custom song forever.
+        <p style={{ textAlign: 'center', margin: '0 0 16px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.45, color: LOVIFY.sub }}>
+          Become a member to keep {savedSong?.title ? `"${savedSong.title}"` : 'your song'} forever and make new ones.
         </p>
 
-        {/* Order summary */}
-        <div style={{ borderRadius: 18, border: `1px solid ${LOVIFY.line}`, background: 'rgba(255,251,244,0.96)', padding: 16, marginBottom: 14, boxShadow: '0 10px 24px -18px rgba(58,42,34,0.5)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-            {savedSong?.cover && <img src={savedSong.cover} alt="" style={{ width: 54, height: 54, borderRadius: 11, objectFit: 'cover', border: `1px solid ${LOVIFY.line}` }} />}
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 14.5, color: LOVIFY.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }}>{savedSong?.title || 'Your custom song'}</div>
+        {/* The saved song */}
+        {savedSong && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', marginBottom: 16 }}>
+            {savedSong.cover && <img src={savedSong.cover} alt="" style={{ width: 50, height: 50, borderRadius: 11, objectFit: 'cover', border: `1px solid ${LOVIFY.line}` }} />}
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 14, color: LOVIFY.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>{savedSong.title || 'Your custom song'}</div>
               <div style={{ fontFamily: SANS, fontSize: 12, color: LOVIFY.orangeDeep, fontWeight: 700 }}>Ready ❤️</div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${LOVIFY.line}`, paddingTop: 12 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: SANS, fontWeight: 800, fontSize: 15, color: LOVIFY.ink }}>
-              Lovify Premium
-              <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 800, color: LOVIFY.orangeDeep, border: `1px solid ${LOVIFY.orange}`, borderRadius: 999, padding: '2px 8px' }}>50% OFF</span>
-            </span>
-            <span style={{ fontFamily: SANS, color: LOVIFY.ink }}>
-              <s style={{ color: LOVIFY.subSoft, fontWeight: 600 }}>$179</s>{' '}
-              <b style={{ color: LOVIFY.orangeDeep, fontSize: 19 }}>$89.99</b>
-              <span style={{ fontSize: 12.5, color: LOVIFY.sub }}>/yr</span>
-            </span>
-          </div>
-          <div style={{ marginTop: 8, fontFamily: SANS, fontSize: 12, color: LOVIFY.sub }}>Billed today · cancel anytime · 30-day money-back guarantee</div>
+        )}
+
+        {/* Plan picker */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+          {OFFER_PLANS.map((p) => {
+            const sel = plan === p.id;
+            return (
+              <button key={p.id} onClick={() => setPlan(p.id)} style={{
+                textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '13px 15px', borderRadius: 14, background: sel ? LOVIFY.orangeGradientSoft : 'rgba(255,251,244,0.95)',
+                border: `1.5px solid ${sel ? LOVIFY.orange : LOVIFY.line}`,
+              }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: 10, border: `2px solid ${sel ? LOVIFY.orange : LOVIFY.line}`, background: sel ? LOVIFY.orange : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12 }}>{sel ? '✓' : ''}</span>
+                  <span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: SANS, fontWeight: 800, fontSize: 15, color: LOVIFY.ink }}>
+                      {p.name}
+                      {p.badge && <span style={{ fontFamily: SANS, fontSize: 10.5, fontWeight: 800, color: LOVIFY.orangeDeep, border: `1px solid ${LOVIFY.orange}`, borderRadius: 999, padding: '1px 7px' }}>{p.badge}</span>}
+                    </span>
+                    <span style={{ display: 'block', fontFamily: SANS, fontSize: 12, color: LOVIFY.sub, marginTop: 1 }}>{p.sub}</span>
+                  </span>
+                </span>
+                <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 16, color: LOVIFY.ink, whiteSpace: 'nowrap' }}>{p.price}<span style={{ fontSize: 12, color: LOVIFY.sub, fontWeight: 600 }}>{p.per}</span></span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Email capture — before the card step, so we keep it + fire a pixel */}
@@ -3963,9 +3982,9 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
           style={{ width: '100%', boxSizing: 'border-box', padding: '14px 15px', borderRadius: 12, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${valid ? LOVIFY.orange : LOVIFY.line}`, fontFamily: SANS, fontSize: 16, color: LOVIFY.ink, outline: 'none' }}
         />
         <div style={{ marginTop: 14 }}>
-          <LovPrimary onClick={() => onOrder?.(email.trim())} disabled={!valid}>Create My Song 🎶</LovPrimary>
+          <LovPrimary onClick={() => onOrder?.(email.trim(), plan)} disabled={!valid}>Save My Song 🎶</LovPrimary>
         </div>
-        <div style={{ textAlign: 'center', marginTop: 10, fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.inkSoft }}>🛡️ 30-Day Money-Back Guarantee</div>
+        <div style={{ textAlign: 'center', marginTop: 10, fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: LOVIFY.inkSoft }}>🛡️ 30-Day Money-Back Guarantee · cancel anytime</div>
         <div style={{ padding: '20px 0 0' }}><TrialProof /></div>
       </div>
     </LovScreen>
