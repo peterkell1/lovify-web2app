@@ -42,7 +42,7 @@ import {
 } from './session';
 import { stashOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
 import { buildRcCheckoutUrl } from '@/lib/rcCheckout';
-import { rcWebPurchase, rcWebBillingConfigured } from '@/lib/rcWebPurchase';
+import { rcWebPurchase, rcWebBillingConfigured, prewarmRcWebBilling } from '@/lib/rcWebPurchase';
 import { initMetaPixel, trackPixel } from '@/lib/metaPixel';
 
 // Funnel step ids (one per screen, in flow order) so PostHog can show
@@ -583,6 +583,15 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     }
   }, [next, mode, TOTAL, offer]);
 
+  // Warm the embedded RC checkout the moment the user reaches the order page, so
+  // "Continue" opens the payment sheet near-instantly instead of pausing to load
+  // the (lazy) SDK + fetch offerings on the tap.
+  useEffect(() => {
+    if (mode === 'web' && offer === 'annual99' && stepIds[step] === 'order_annual99' && rcWebBillingConfigured()) {
+      void prewarmRcWebBilling(sessionIdRef.current);
+    }
+  }, [step, stepIds, mode, offer]);
+
   const screen = useMemo(() => {
     // Render by step id (not numeric index) so the app + web flows share one
     // renderer and differ only in which ids are present in `stepIds`.
@@ -713,7 +722,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       case 'order_annual99': return <V3_OrderAnnual99
         onBack={back}
         email={offerEmailRef.current}
-        onOrder={(planId: string) => { buyPlan(planId, { email: offerEmailRef.current }); }}
+        // Return the promise so the button can show a loading state until the
+        // RC checkout actually opens (the SDK load + offerings fetch take a beat).
+        onOrder={(planId: string) => buyPlan(planId, { email: offerEmailRef.current })}
         savedSong={(() => {
           const picked = songs[state.savedVersion ?? 0] ?? songs[0];
           return (picked || visionUrl) ? {

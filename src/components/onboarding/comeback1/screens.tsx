@@ -4013,10 +4013,32 @@ const OFFER_BENEFITS = [
 // The /offer paywall — "Save your songs & unlock Lovify". A single benefits-led
 // screen (no monthly/annual picker — we focus on annual) whose Continue button
 // goes STRAIGHT to the $99/year membership checkout.
+// Small white spinner for the Continue button's loading state (SVG so it needs
+// no CSS keyframes).
+function BtnSpinner() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 50 50" style={{ flexShrink: 0 }}>
+      <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="5" strokeLinecap="round" strokeDasharray="80 50">
+        <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.9s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  );
+}
+
 export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
-  onOrder?: (planId: string) => void;
+  onOrder?: (planId: string) => void | Promise<unknown>;
   savedSong?: { cover: string | null; title: string } | null;
 }) {
+  // Loading state so the button gives instant feedback — opening the embedded RC
+  // checkout (SDK load + offerings fetch) takes a beat, and without this the tap
+  // felt dead until the sheet appeared.
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await onOrder?.('annual99'); }
+    finally { setBusy(false); } // on success the page navigates away; on cancel/error we reset
+  };
   return (
     <LovScreen>
       <LovBack onClick={onBack} />
@@ -4051,7 +4073,11 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
         ))}
       </div>
       <div style={{ padding: '12px 24px 28px', flexShrink: 0 }}>
-        <LovPrimary onClick={() => onOrder?.('annual99')}>Continue</LovPrimary>
+        <LovPrimary onClick={go} disabled={busy} style={busy ? { background: LOVIFY.orangeGradient, color: '#FFFCF4', cursor: 'default', boxShadow: '0 14px 28px -10px rgba(216, 92, 28, 0.45)' } : undefined}>
+          {busy
+            ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9 }}><BtnSpinner />Opening secure checkout…</span>
+            : 'Continue'}
+        </LovPrimary>
         <div style={{ textAlign: 'center', marginTop: 10, fontFamily: SANS, fontSize: 12.5, color: LOVIFY.sub }}>
           <strong style={{ color: LOVIFY.ink }}>$99/year</strong> · billed today · cancel anytime
         </div>
