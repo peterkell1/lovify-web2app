@@ -72,7 +72,7 @@ const toggle = (list: string[], item: string) =>
 
 // A small speaker toggle (top-right) for the ambient soundtrack. Visual + state
 // only for now; wire to a real <audio> loop once a track is chosen.
-function MusicToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+function MusicToggle({ on, onClick, color = '#fff' }: { on: boolean; onClick: () => void; color?: string }) {
   return (
     <button
       onClick={onClick}
@@ -84,15 +84,15 @@ function MusicToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ filter: 'drop-shadow(0 1px 6px rgba(0,0,0,0.4))' }}>
-        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ filter: color === '#fff' ? 'drop-shadow(0 1px 6px rgba(0,0,0,0.4))' : 'none' }}>
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill={color} />
         {on ? (
           <>
-            <path d="M16 8.5a4 4 0 0 1 0 7" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
-            <path d="M18.5 6a7 7 0 0 1 0 12" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M16 8.5a4 4 0 0 1 0 7" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M18.5 6a7 7 0 0 1 0 12" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
           </>
         ) : (
-          <path d="M17 9l5 6M22 9l-5 6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M17 9l5 6M22 9l-5 6" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
         )}
       </svg>
     </button>
@@ -576,7 +576,7 @@ function GlassPanel({ side }: { side: 'left' | 'right' }) {
 // Cycles through all three benefit promises once, then auto-advances — no
 // Continue button. The headline reveals slowly so it's easy to read.
 const BENEFIT_HOLD = 2000; // ms each benefit stays on screen
-export function V3_DrugHook({ onNext, onBack, onSkip, opener }: NavProps & { autoAdvanceOnly?: boolean; opener?: boolean }) {
+export function V3_DrugHook({ onNext, onBack, onSkip, opener, sound = true, onToggleSound }: NavProps & { autoAdvanceOnly?: boolean; opener?: boolean; sound?: boolean; onToggleSound?: () => void }) {
   // `opener`: /offer uses this screen as page 1 — loop the benefits forever and
   // NEVER auto-advance (wait for Continue), and drop the back button (nowhere to
   // go back to). The live funnel keeps the 3-benefit, auto-advancing intro.
@@ -609,7 +609,11 @@ export function V3_DrugHook({ onNext, onBack, onSkip, opener }: NavProps & { aut
     <LovScreen>
       <AmbientGlow />
       {!opener && <LovBack onClick={onBack} />}
-      <LovSkip onClick={onSkip} />
+      {/* /offer opener: keep the music toggle in the top-right (like the old home
+          screen did) instead of Skip. Dark icon for the light hook background. */}
+      {opener
+        ? <MusicToggle on={sound !== false} onClick={() => onToggleSound?.()} color={LOVIFY.ink} />
+        : <LovSkip onClick={onSkip} />}
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 30px', textAlign: 'center' }}>
         <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: 600, fontSize: 25, lineHeight: 1.3, letterSpacing: -0.5, color: LOVIFY.ink }}>
           <RevealWords text="Imagine a" per={0.16} />{' '}

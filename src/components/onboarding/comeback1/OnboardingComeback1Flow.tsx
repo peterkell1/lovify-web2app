@@ -561,7 +561,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       case 'home': return <V3_01_Splash onNext={next} onSignIn={mode === 'web' ? undefined : () => navigate('/login')} sound={playing} onToggleSound={() => setSound((s) => !s)} />;
       // "Imagine a drug → music" opener — make the claim feel like a discovery,
       // then flip to the user's own goals before pitching.
-      case 'hook_imagine_drug': return <V3_DrugHook onNext={next} onBack={back} onSkip={skip} autoAdvanceOnly={mode === 'web'} opener={offer === 'annual99'} />;
+      case 'hook_imagine_drug': return <V3_DrugHook onNext={next} onBack={back} onSkip={skip} autoAdvanceOnly={mode === 'web'} opener={offer === 'annual99'} sound={playing} onToggleSound={() => setSound((s) => !s)} />;
       case 'reveal_music': return <V3_DrugReveal onNext={next} onBack={back} />;
       case 'discovery': return <V3_Discovery onNext={next} onBack={back} web={mode === 'web'} />;
       case 'science': return <V3_Science onNext={next} onBack={back} web={mode === 'web'} />;
