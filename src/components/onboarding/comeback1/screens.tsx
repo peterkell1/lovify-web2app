@@ -4000,13 +4000,14 @@ export function V3_CaptureEmail({ onBack, onSubmit, savedSong, preGen }: NavProp
   );
 }
 
-// What the annual membership unlocks — shown as the /offer paywall's benefit
-// list (CalAI-style), so the value is clear before the single Continue → $99/yr.
+// The /offer paywall's benefit list. BENEFIT-led (the transformation), with the
+// feature as the "how" — sells the outcome, not the mechanics. Songs are
+// credit-based (NOT unlimited), so we say "a song for every part of your life."
 const OFFER_BENEFITS = [
-  { icon: '🎵', t: 'Keep this song forever', d: 'Save & download the song you just made — yours to keep.' },
-  { icon: '✨', t: 'Make unlimited songs', d: 'Turn any goal, person, or moment into a custom track, anytime.' },
-  { icon: '🖼️', t: 'Your vision boards', d: 'A picture of you living the life you’re singing about.' },
-  { icon: '🔁', t: 'Daily play to rewire your mind', d: 'Press play every day and let the words take hold.' },
+  { icon: '✨', t: 'Become who you’re meant to be', d: 'Personalized songs that rewire your beliefs, so you show up as your best self.' },
+  { icon: '💛', t: 'A song for every part of your life', d: 'Use your credits to turn any goal, person, or moment into a custom track.' },
+  { icon: '🧠', t: 'Build more empowering beliefs', d: 'Play your songs daily and let the new words take hold.' },
+  { icon: '🖼️', t: 'See the life you’re singing about', d: 'Your vision boards — a picture of you living it.' },
 ];
 
 // The /offer paywall — "Save your songs & unlock Lovify". A single benefits-led
@@ -4020,8 +4021,8 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
     <LovScreen>
       <LovBack onClick={onBack} />
       <LovHeading
-        title={<>Save your songs & <LovAccent>unlock Lovify</LovAccent></>}
-        subcopy="Here's everything you get:"
+        title={<>Save your song & <LovAccent>create a life you love</LovAccent></>}
+        subcopy="Here's everything you unlock:"
         titleStyle={{ fontSize: 24 }}
       />
       {savedSong && (
