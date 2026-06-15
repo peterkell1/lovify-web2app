@@ -3918,30 +3918,36 @@ const OFFER_PLANS = [
   { id: 'annual99', name: 'Annual', price: '$89.99', per: '/year', sub: 'Billed today · best value', badge: 'SAVE 58%' },
   { id: 'monthly', name: 'Monthly', price: '$17.99', per: '/month', sub: 'Billed today · cancel anytime', badge: '' },
 ] as const;
-// PAGE 1 of the /offer save flow — email ONLY, no price. This is deliberately
-// the lowest-friction screen we can show so we capture the most emails possible:
-// the song is the reward, "email me my song" is the ask, and the price/plan
-// decision is deferred to page 2 (V3_OrderAnnual99). Everyone who submits here
-// is a captured, retargetable lead even if they never pick a plan.
-export function V3_CaptureEmail({ onBack, onSubmit, savedSong }: NavProps & {
+// Email capture for the /offer funnel. Two modes:
+//  • preGen (the gate): shown the instant the chat finishes its Q&A, BEFORE we
+//    spend money generating. The email is the key that unlocks creation, and the
+//    promise is functional — we email them a copy of the finished song. Honest
+//    exchange (email → a real song they get to keep), max emails, no wasted
+//    generation spend on people who give nothing.
+//  • default (the save page): used as a standalone "save your song" screen.
+export function V3_CaptureEmail({ onBack, onSubmit, savedSong, preGen }: NavProps & {
   onSubmit?: (email: string) => void;
   savedSong?: { cover: string | null; title: string } | null;
+  preGen?: boolean;
 }) {
   const [email, setEmail] = useState('');
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   return (
     <LovScreen>
-      <LovBack onClick={onBack} />
+      {onBack && <LovBack onClick={onBack} />}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 22px 18px' }}>
         <h1 style={{ textAlign: 'center', margin: '6px 0 4px', fontFamily: SANS, fontWeight: 800, fontSize: 26, letterSpacing: -0.6, lineHeight: 1.15, color: LOVIFY.ink }}>
-          Your song is ready 🎶
+          {preGen ? 'Where should we send it? 🎶' : 'Your song is ready 🎶'}
         </h1>
         <p style={{ textAlign: 'center', margin: '0 0 18px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.45, color: LOVIFY.sub }}>
-          Enter your email and we'll save {savedSong?.title ? `"${savedSong.title}"` : 'your song'} so you never lose it.
+          {preGen
+            ? "Pop in your email — we'll create your song and send you a copy to keep."
+            : <>Enter your email and we'll save {savedSong?.title ? `"${savedSong.title}"` : 'your song'} so you never lose it.</>}
         </p>
 
-        {/* The saved song — the reward they're claiming with their email */}
-        {savedSong && (
+        {/* The saved song — the reward they're claiming with their email (save mode only;
+            in preGen the song doesn't exist yet). */}
+        {!preGen && savedSong && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', marginBottom: 18 }}>
             {savedSong.cover && <img src={savedSong.cover} alt="" style={{ width: 50, height: 50, borderRadius: 11, objectFit: 'cover', border: `1px solid ${LOVIFY.line}` }} />}
             <div style={{ textAlign: 'left' }}>
@@ -3961,7 +3967,7 @@ export function V3_CaptureEmail({ onBack, onSubmit, savedSong }: NavProps & {
           style={{ width: '100%', boxSizing: 'border-box', padding: '14px 15px', borderRadius: 12, background: 'rgba(255,251,244,0.95)', border: `1.5px solid ${valid ? LOVIFY.orange : LOVIFY.line}`, fontFamily: SANS, fontSize: 16, color: LOVIFY.ink, outline: 'none' }}
         />
         <div style={{ marginTop: 14 }}>
-          <LovPrimary onClick={() => onSubmit?.(email.trim())} disabled={!valid}>Email Me My Song 🎶</LovPrimary>
+          <LovPrimary onClick={() => onSubmit?.(email.trim())} disabled={!valid}>{preGen ? 'Create My Song 🎶' : 'Email Me My Song 🎶'}</LovPrimary>
         </div>
         <div style={{ textAlign: 'center', marginTop: 10, fontFamily: SANS, fontSize: 12, color: LOVIFY.inkSoft }}>No spam, ever — just your song. 🔒</div>
         <div style={{ padding: '22px 0 0' }}><TrialProof /></div>
