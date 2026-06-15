@@ -11,15 +11,15 @@
 const KEY = 'lov-funnel-offer';
 
 // Day-0 cash per offer funnel (USD), for the purchase_completed value.
-export const OFFER_PRICE: Record<string, number> = { annual99: 89.99 };
+export const OFFER_PRICE: Record<string, number> = { annual99: 99 };
 
 // Day-0 cash by plan id — the most accurate Purchase value (what's charged
 // today): the $1-trial annual collects $1 now; monthly $17.99; the offer
-// funnel's annual $89.99 up front. Read on /start/success via the stashed plan.
+// funnel's annual $99 up front. Read on /start/success via the stashed plan.
 export const PLAN_DAY0_PRICE: Record<string, number> = {
   yearly_premium_trial: 1,
   monthly: 17.99,
-  annual99: 89.99,
+  annual99: 99,
 };
 
 /** Read the last plan the buyer chose ('' if none). */

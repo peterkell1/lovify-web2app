@@ -83,7 +83,7 @@ const WEB_STEP_IDS_B = [
 // leaked or are redundant for warm video-ad traffic: the demo, the genre/time
 // preference quiz, and the old 5-paywall stack (collapsed to one offer). The
 // song chat asks for the email in-conversation and renders with Suno; they hear
-// it free, then pay to keep it (single $17.99/mo or $89.99/yr offer) → account.
+// it free, then pay to keep it (single $17.99/mo or $99/yr offer) → account.
 // Note: NO 'home' — warm video-ad traffic was already sold by the ad, so /offer
 // opens straight on the hook ("Imagine a drug…"), a stronger opener that pulls
 // people into the flow faster instead of a cold-traffic brand splash.

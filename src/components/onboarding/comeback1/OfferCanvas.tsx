@@ -108,7 +108,7 @@ const SCREENS: { id: string; label: string; node: ReactNode }[] = [
   { id: '15', label: '15 · Turn anything into a song', node: <V3_SongIdeas onNext={noop} onBack={noop} /> },
   { id: '16', label: '16 · Make your first song (lead-in)', node: <V3_MakeSong onNext={noop} onBack={noop} /> },
   { id: '17', label: '17 · Song chat — Q&A + email + reveal (LIVE)', node: <WChat collectEmail /> },
-  { id: '18', label: '18 · Save your song ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
+  { id: '18', label: '18 · Save your song ($99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
   { id: '19', label: '19 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
   { id: '20', label: '20 · Success (after RC checkout)', node: <StartSuccessView membership /> },
 ];
