@@ -18,7 +18,7 @@ import {
   V3_11_LeanedOn, V3_Genres, V3_14_Source, V3_16_Nudge,
   V3_MakeSong,
   V3_22_Trial, V3_TrialOffer, V3_TrialReminder, V3_TrialPrice, V3_23_Paywall,
-  V3_OrderAnnual99,
+  V3_CaptureEmail, V3_OrderAnnual99,
   V3_CreateAccount,
   ONBOARDING_PRELOAD_IMAGES,
 } from './screens';
@@ -78,10 +78,12 @@ const WEB_STEP_IDS_B = [
 ] as const;
 
 // The standalone offer funnel (route /offer): dead simple — landing → STRAIGHT
-// into the song-creation chat (the magic moment) → a "save your song"
-// membership order page (email capture, then $17.99/mo or $89.99/yr up front).
+// into the song-creation chat (the magic moment) → EMAIL-ONLY capture page
+// (max-emails: lowest friction, no price) → plan picker ($17.99/mo or $89.99/yr
+// up front) → account. Email is captured on its own page BEFORE any price so we
+// keep + retarget every lead even if they bail at the plan step.
 const WEB_STEP_IDS_ANNUAL99 = [
-  'home', 'song_chat', 'order_annual99', 'create_account',
+  'home', 'song_chat', 'capture_email', 'order_annual99', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
@@ -335,6 +337,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
   // without re-rendering. Null when the backend is unreachable (preview builds),
   // in which case the flow degrades to local-only persistence.
   const sessionIdRef = useRef<string | null>(restored?.sessionId ?? null);
+  // The /offer funnel captures email on its own page (capture_email) BEFORE the
+  // plan picker; stash it here so the plan step + checkout reuse it.
+  const offerEmailRef = useRef('');
   const [sessionId, setSessionId] = useState<string | null>(restored?.sessionId ?? null);
   useEffect(() => {
     let cancelled = false;
@@ -472,8 +477,10 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       capturePostHogEvent('checkout_started', { surface: 'web', plan_id: planId });
       trackPaywallCompleted({ source: 'web_funnel_trial', planId });
       // Lead = strongest on-domain intent we can fire before the off-domain RC
-      // checkout (email is entered on pay.rev.cat, which we can't pixel).
-      trackPixel('Lead');
+      // checkout (email is entered on pay.rev.cat, which we can't pixel). The
+      // /offer funnel already fired Lead when the email was captured on its own
+      // page, so here it fires InitiateCheckout instead — no double-counting.
+      trackPixel(offer === 'annual99' ? 'InitiateCheckout' : 'Lead');
       // Persist fbc/fbp/event_id server-side now (the _fbp cookie is set by now)
       // so the webhook can fire the deduped Meta CAPI Purchase. Fire-and-forget.
       void saveSessionAttribution(sessionIdRef.current);
@@ -519,7 +526,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     } else if (!result.handled) {
       next(); // non-iOS / preview — continue the flow
     }
-  }, [next, mode, TOTAL]);
+  }, [next, mode, TOTAL, offer]);
 
   const screen = useMemo(() => {
     // Render by step id (not numeric index) so the app + web flows share one
@@ -631,12 +638,31 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       // The offer funnel's "save your song" membership page: capture email →
       // fire Lead pixel + email_captured → RC checkout for the chosen plan
       // ($17.99/mo = existing 'monthly'; $89.99/yr up front = 'annual99').
+      // PAGE 1: email only, no price — the max-emails capture. Fire the lead
+      // events HERE so we count + retarget every email, including people who
+      // never reach the plan/price page.
+      case 'capture_email': return <V3_CaptureEmail
+        onBack={back}
+        onSubmit={(email: string) => {
+          offerEmailRef.current = email;
+          capturePostHogEvent('email_captured', { flow: 'onboarding_comeback1', funnel: 'annual99' });
+          trackPixel('Lead');
+          void saveSessionProgress(sessionIdRef.current, 'capture_email', { email });
+          next();
+        }}
+        savedSong={(() => {
+          const picked = songs[state.savedVersion ?? 0] ?? songs[0];
+          return (picked || visionUrl) ? {
+            cover: visionUrl || picked?.image_url || null,
+            title: picked?.title || state.lyricsTitle || 'Your song',
+          } : null;
+        })()}
+      />;
+      // PAGE 2: plan picker. Email was already captured on page 1; reuse it.
       case 'order_annual99': return <V3_OrderAnnual99
         onBack={back}
-        onOrder={(email: string, planId: string) => {
-          capturePostHogEvent('email_captured', { flow: 'onboarding_comeback1', funnel: 'annual99', plan_id: planId });
-          buyPlan(planId, { email });
-        }}
+        email={offerEmailRef.current}
+        onOrder={(planId: string) => { buyPlan(planId, { email: offerEmailRef.current }); }}
         savedSong={(() => {
           const picked = songs[state.savedVersion ?? 0] ?? songs[0];
           return (picked || visionUrl) ? {
