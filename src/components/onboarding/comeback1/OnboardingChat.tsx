@@ -400,6 +400,9 @@ export function V3_Chat({
   useEffect(() => { if (!draft && inputRef.current) inputRef.current.style.height = 'auto'; }, [draft]);
   const nid = () => `m${idRef.current++}`;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // When the on-screen keyboard is open we shrink the chat to the VISUAL
+  // viewport height (set here); null = keyboard closed → full height.
+  const [kbHeight, setKbHeight] = useState<number | null>(null);
 
   // Auto-scroll to the newest message (and to the reveal once it appears).
   const scrollToEnd = () => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight; };
@@ -417,14 +420,28 @@ export function V3_Chat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealed]);
 
-  // Re-pin to the newest message whenever the keyboard opens/closes (the visual
-  // viewport resizes), so the question being answered never scrolls out of view.
+  // iOS keyboard handling. When the keyboard opens, the layout viewport (100dvh)
+  // does NOT shrink, so the composer is pushed under the keyboard and Safari
+  // scrolls the whole document up to reveal it — shoving the header + the
+  // question being answered off the top of the screen. Fix: when the visual
+  // viewport is meaningfully shorter than the layout (= keyboard up), clamp the
+  // chat to the visual-viewport height and pin the document to the top, so the
+  // composer sits right above the keyboard and the latest message (the question)
+  // stays visible just above it. Closed → null → normal full height (no change
+  // to desktop or the address-bar show/hide).
   useEffect(() => {
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
     if (!vv) return;
-    const onResize = () => scrollToEnd();
+    const onResize = () => {
+      const open = vv.height < window.innerHeight - 120;
+      setKbHeight(open ? vv.height : null);
+      if (open) window.scrollTo(0, 0);
+      scrollToEnd();
+    };
+    onResize();
     vv.addEventListener('resize', onResize);
-    return () => vv.removeEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    return () => { vv.removeEventListener('resize', onResize); vv.removeEventListener('scroll', onResize); };
   }, []);
 
   // Persist a snapshot up to the parent whenever the conversation changes, so
@@ -871,7 +888,7 @@ export function V3_Chat({
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: LOVIFY.bg }}>
+    <div style={{ height: kbHeight ? `${kbHeight}px` : '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column', background: LOVIFY.bg, overflow: 'hidden' }}>
       {/* Header — assistant identity, like a real chat thread. */}
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px 12px', borderBottom: `1px solid ${LOVIFY.line}` }}>
         <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: LOVIFY.ink, fontSize: 22, lineHeight: 1 }}>‹</button>
