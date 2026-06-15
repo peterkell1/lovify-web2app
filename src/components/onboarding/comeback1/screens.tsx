@@ -400,6 +400,18 @@ const DRUG_BENEFITS = [
   'feel genuinely happy again',
 ];
 
+// /offer opener: a longer list that LOOPS (never auto-advances) so the hook keeps
+// listing benefits until the user taps Continue. Kept separate so the live
+// funnel's 3-benefit, auto-advancing intro is unchanged.
+const OPENER_BENEFITS = [
+  'become who you\'re meant to be',
+  'create a life you love',
+  'feel genuinely happy again',
+  'rediscover your spark',
+  'fall back in love with life',
+  'feel like yourself again',
+];
+
 // ═══════════════════════════════════════════════════════════════
 // Cinematic motion primitives — the "premium" layer. These give every hero a
 // constant subtle life (float / breathe / glow) like Moongate. When real
@@ -564,7 +576,11 @@ function GlassPanel({ side }: { side: 'left' | 'right' }) {
 // Cycles through all three benefit promises once, then auto-advances — no
 // Continue button. The headline reveals slowly so it's easy to read.
 const BENEFIT_HOLD = 2000; // ms each benefit stays on screen
-export function V3_DrugHook({ onNext, onBack, onSkip }: NavProps & { autoAdvanceOnly?: boolean }) {
+export function V3_DrugHook({ onNext, onBack, onSkip, opener }: NavProps & { autoAdvanceOnly?: boolean; opener?: boolean }) {
+  // `opener`: /offer uses this screen as page 1 — loop the benefits forever and
+  // NEVER auto-advance (wait for Continue), and drop the back button (nowhere to
+  // go back to). The live funnel keeps the 3-benefit, auto-advancing intro.
+  const benefits = opener ? OPENER_BENEFITS : DRUG_BENEFITS;
   const [i, setI] = useState(0);
   useEffect(() => {
     // Let the slow headline land first, then start cycling benefits.
@@ -573,11 +589,15 @@ export function V3_DrugHook({ onNext, onBack, onSkip }: NavProps & { autoAdvance
     const timers: ReturnType<typeof setTimeout>[] = [];
     const tick = () => {
       idx += 1;
-      if (idx < DRUG_BENEFITS.length) {
+      if (opener) {
+        // Keep rotating through the benefits; wait for the user to tap Continue.
+        setI(idx % benefits.length);
+        timers.push(setTimeout(tick, BENEFIT_HOLD));
+      } else if (idx < benefits.length) {
         setI(idx);
         timers.push(setTimeout(tick, BENEFIT_HOLD));
       } else {
-        // all three shown — advance to the reveal.
+        // all benefits shown — advance to the reveal.
         timers.push(setTimeout(() => onNext?.(), BENEFIT_HOLD));
       }
     };
@@ -588,7 +608,7 @@ export function V3_DrugHook({ onNext, onBack, onSkip }: NavProps & { autoAdvance
   return (
     <LovScreen>
       <AmbientGlow />
-      <LovBack onClick={onBack} />
+      {!opener && <LovBack onClick={onBack} />}
       <LovSkip onClick={onSkip} />
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 30px', textAlign: 'center' }}>
         <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: 600, fontSize: 25, lineHeight: 1.3, letterSpacing: -0.5, color: LOVIFY.ink }}>
@@ -606,7 +626,7 @@ export function V3_DrugHook({ onNext, onBack, onSkip }: NavProps & { autoAdvance
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
               style={{ fontFamily: SANS, fontWeight: 800, fontSize: 22, lineHeight: 1.2, color: LOVIFY.orangeDeep }}
             >
-              {DRUG_BENEFITS[i]}
+              {benefits[i]}
             </motion.div>
           </AnimatePresence>
         </div>

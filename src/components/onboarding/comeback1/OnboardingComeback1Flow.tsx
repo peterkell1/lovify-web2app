@@ -84,8 +84,11 @@ const WEB_STEP_IDS_B = [
 // preference quiz, and the old 5-paywall stack (collapsed to one offer). The
 // song chat asks for the email in-conversation and renders with Suno; they hear
 // it free, then pay to keep it (single $17.99/mo or $89.99/yr offer) → account.
+// Note: NO 'home' — warm video-ad traffic was already sold by the ad, so /offer
+// opens straight on the hook ("Imagine a drug…"), a stronger opener that pulls
+// people into the flow faster instead of a cold-traffic brand splash.
 const WEB_STEP_IDS_ANNUAL99 = [
-  'home', 'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
+  'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
   'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
   'proof_music_negative', 'proof_more_depressed', 'the_turn', 'song_ideas',
   'make_first_song', 'song_chat', 'order_annual99', 'create_account',
@@ -558,7 +561,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       case 'home': return <V3_01_Splash onNext={next} onSignIn={mode === 'web' ? undefined : () => navigate('/login')} sound={playing} onToggleSound={() => setSound((s) => !s)} />;
       // "Imagine a drug → music" opener — make the claim feel like a discovery,
       // then flip to the user's own goals before pitching.
-      case 'hook_imagine_drug': return <V3_DrugHook onNext={next} onBack={back} onSkip={skip} autoAdvanceOnly={mode === 'web'} />;
+      case 'hook_imagine_drug': return <V3_DrugHook onNext={next} onBack={back} onSkip={skip} autoAdvanceOnly={mode === 'web'} opener={offer === 'annual99'} />;
       case 'reveal_music': return <V3_DrugReveal onNext={next} onBack={back} />;
       case 'discovery': return <V3_Discovery onNext={next} onBack={back} web={mode === 'web'} />;
       case 'science': return <V3_Science onNext={next} onBack={back} web={mode === 'web'} />;
