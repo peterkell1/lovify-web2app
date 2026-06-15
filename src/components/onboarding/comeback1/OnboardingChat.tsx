@@ -786,7 +786,8 @@ export function V3_Chat({
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
     : mode === 'visionScene' || mode === 'visionText' ? 'Or describe how you want to look…'
-    : SPEECH_OK ? 'Type or tap 🎤 to speak…' : 'Type your answer…';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    : (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) ? 'Type or tap 🎤 to speak…' : 'Type your answer…';
 
   // ── Actually make the song: kick off generation in the parent + reveal INLINE ──
   const startGeneration = () => {
@@ -1235,19 +1236,10 @@ export function V3_Chat({
 // Lets people just TALK their answer instead of typing — great for getting
 // specific detail quickly. Renders nothing where speech isn't supported
 // (some embedded/older browsers); the native app uses its own voice pipeline.
-// Web Speech recognition is unreliable / silent on iOS Safari and inside
-// in-app webviews (Instagram / Facebook browser) — the mic button would render
-// but do absolutely nothing when tapped. Only offer the custom mic where it
-// actually works; everywhere else people use the keyboard's own dictation mic.
-const SPEECH_OK = (() => {
-  if (typeof window === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  const iOS = /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
-  if (iOS) return false;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-})();
-
+// iOS Safari ends recognition sessions after a few seconds, so the keep-alive
+// logic below (continuous + onend restart while listening) keeps the mic going
+// until the user actually stops it — i.e. the mic IS offered on iOS, where
+// webkitSpeechRecognition exists, matching the live funnel's behavior.
 function MicButton({ onResult, disabled }: { onResult: (t: string) => void; disabled?: boolean }) {
   const [listening, setListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1260,7 +1252,7 @@ function MicButton({ onResult, disabled }: { onResult: (t: string) => void; disa
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SR = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
   useEffect(() => () => { keepAliveRef.current = false; try { recRef.current?.stop?.(); } catch { /* ignore */ } }, []);
-  if (!SR || !SPEECH_OK) return null;
+  if (!SR) return null;
   const toggle = () => {
     if (listening) {
       keepAliveRef.current = false;

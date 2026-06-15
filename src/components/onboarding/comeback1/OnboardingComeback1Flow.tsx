@@ -81,10 +81,13 @@ const WEB_STEP_IDS_B = [
 // The standalone offer funnel (route /offer) — "v2". Keeps the full persuasion
 // arc (hook → proof → "you can turn anything into a song"), which retained ~76%
 // in the live data, then goes STRAIGHT to making the song. Cuts the parts that
-// leaked or are redundant for warm video-ad traffic: the demo, the genre/time
-// preference quiz, and the old 5-paywall stack (collapsed to one offer). The
-// song chat asks for the email in-conversation and renders with Suno; they hear
-// it free, then pay to keep it (single $17.99/mo or $99/yr offer) → account.
+// leaked or are redundant for warm video-ad traffic: the demo, the time
+// preference quiz, and the old 5-paywall stack (collapsed to one offer). KEEPS
+// 'genres' — picking favorite genres right before making the song feeds the
+// chat's style suggestions (buildStyleContext → suggestSoundStyles), so the song
+// lands in a sound they already love. The song chat asks for the email
+// in-conversation and renders with Suno; they hear it free, then pay to keep it
+// (single $17.99/mo or $99/yr offer) → account.
 // Note: NO 'home' — warm video-ad traffic was already sold by the ad, so /offer
 // opens straight on the hook ("Imagine a drug…"), a stronger opener that pulls
 // people into the flow faster instead of a cold-traffic brand splash.
@@ -92,7 +95,7 @@ const WEB_STEP_IDS_ANNUAL99 = [
   'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
   'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
   'proof_music_negative', 'proof_more_depressed', 'the_turn', 'song_ideas',
-  'make_first_song', 'song_chat', 'order_annual99', 'create_account',
+  'genres', 'make_first_song', 'song_chat', 'order_annual99', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
