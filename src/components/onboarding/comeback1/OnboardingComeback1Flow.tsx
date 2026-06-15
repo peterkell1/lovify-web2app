@@ -634,6 +634,11 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
         web={mode === 'web'}
         playing={playing}
         onToggleSound={() => setSound((s) => !s)}
+        // Tapping the mic is often the first gesture that would unblock the
+        // ambient loop (which then blasts at system volume on iOS, since iOS
+        // ignores the 0.4 volume). Kill the music intent AND pause it outright
+        // so speaking is never drowned out / startled by sudden loud music.
+        onMuteSound={() => { setSound(false); try { audioRef.current?.pause(); } catch { /* ignore */ } }}
         genres={state.genres}
         persisted={chatRef.current}
         onPersist={(s) => { chatRef.current = s; setChatTick((t) => t + 1); }}
