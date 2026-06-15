@@ -77,13 +77,13 @@ const WEB_STEP_IDS_B = [
   'paywall_price', 'create_account',
 ] as const;
 
-// The standalone offer funnel (route /offer): dead simple — landing → STRAIGHT
-// into the song-creation chat (the magic moment) → EMAIL-ONLY capture page
-// (max-emails: lowest friction, no price) → plan picker ($17.99/mo or $89.99/yr
-// up front) → account. Email is captured on its own page BEFORE any price so we
-// keep + retarget every lead even if they bail at the plan step.
+// The standalone offer funnel (route /offer): landing → song-creation chat. When
+// the chat finishes its Q&A, an EMAIL GATE pops up BEFORE we generate (max
+// emails + the email is functional: we send them their finished song). They then
+// HEAR it free, and only pay to keep it → plan picker ($17.99/mo or $89.99/yr) →
+// account. The gate is offer-only; the shared chat is otherwise untouched.
 const WEB_STEP_IDS_ANNUAL99 = [
-  'home', 'song_chat', 'capture_email', 'order_annual99', 'create_account',
+  'home', 'song_chat', 'order_annual99', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
@@ -236,6 +236,10 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
   const [playing, setPlaying] = useState(false);
   // Web-funnel payment sheet (Apple Pay / card slide-up).
   const [paySheet, setPaySheet] = useState<{ open: boolean; planId: string }>({ open: false, planId: '' });
+  // /offer email gate: when the chat finishes its Q&A we hold the result here and
+  // show the email gate over the chat; generation only starts once they submit.
+  const [songGate, setSongGate] = useState<boolean>(false);
+  const gateResultRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   // Their saved song, kept playable THROUGH the paywall (a floating mini-player
   // follows them) so they keep feeling it while they decide — instead of the
@@ -605,7 +609,16 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
           set('voice', r.voice);
           set('lyrics', r.lyrics);
           set('lyricsTitle', r.title);
-          startSongGen(r.lyrics, r.title, r.soundStyle, r.voice);
+          // /offer funnel: gate generation behind the email. Hold the result and
+          // open the email gate; generation starts on submit (see gate overlay).
+          // We only spend on a song once we have a lead, and the email is honest
+          // — we send them their finished song. Other funnels generate now.
+          if (offer === 'annual99' && !offerEmailRef.current) {
+            gateResultRef.current = r;
+            setSongGate(true);
+          } else {
+            startSongGen(r.lyrics, r.title, r.soundStyle, r.voice);
+          }
         }}
         onSave={(n) => {
           // Remember which version they saved so the paywall keeps showing THEIR
@@ -638,27 +651,8 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       // The offer funnel's "save your song" membership page: capture email →
       // fire Lead pixel + email_captured → RC checkout for the chosen plan
       // ($17.99/mo = existing 'monthly'; $89.99/yr up front = 'annual99').
-      // PAGE 1: email only, no price — the max-emails capture. Fire the lead
-      // events HERE so we count + retarget every email, including people who
-      // never reach the plan/price page.
-      case 'capture_email': return <V3_CaptureEmail
-        onBack={back}
-        onSubmit={(email: string) => {
-          offerEmailRef.current = email;
-          capturePostHogEvent('email_captured', { flow: 'onboarding_comeback1', funnel: 'annual99' });
-          trackPixel('Lead');
-          void saveSessionProgress(sessionIdRef.current, 'capture_email', { email });
-          next();
-        }}
-        savedSong={(() => {
-          const picked = songs[state.savedVersion ?? 0] ?? songs[0];
-          return (picked || visionUrl) ? {
-            cover: visionUrl || picked?.image_url || null,
-            title: picked?.title || state.lyricsTitle || 'Your song',
-          } : null;
-        })()}
-      />;
-      // PAGE 2: plan picker. Email was already captured on page 1; reuse it.
+      // Plan picker. Email was already captured at the gate (before generation);
+      // reuse it for checkout + the "Saving to <email>" confirmation.
       case 'order_annual99': return <V3_OrderAnnual99
         onBack={back}
         email={offerEmailRef.current}
@@ -885,6 +879,27 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
           armPlanId={mode === 'web' && (stepIds[step] === 'paywall_price' || stepIds[step] === 'paywall_plans') ? 'yearly_premium_trial' : undefined}
           onClose={() => setPaySheet((s) => ({ ...s, open: false }))}
         />
+
+        {/* /offer email gate — appears over the chat the instant Q&A finishes,
+            BEFORE generation. Email is required (no dismiss); on submit we fire
+            the lead events, persist the email, then kick off the song. The chat
+            stays mounted underneath, so its reveal shows once the song is ready. */}
+        {songGate && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 40, background: LOVIFY.bg }}>
+            <V3_CaptureEmail
+              preGen
+              onSubmit={(email: string) => {
+                offerEmailRef.current = email;
+                capturePostHogEvent('email_captured', { flow: 'onboarding_comeback1', funnel: 'annual99' });
+                trackPixel('Lead');
+                void saveSessionProgress(sessionIdRef.current, 'capture_email', { email });
+                setSongGate(false);
+                const r = gateResultRef.current;
+                if (r) startSongGen(r.lyrics, r.title, r.soundStyle, r.voice);
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

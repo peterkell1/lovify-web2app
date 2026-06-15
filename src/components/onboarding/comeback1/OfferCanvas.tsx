@@ -73,11 +73,12 @@ const FRAME_H = 736;
 
 const SCREENS: { id: string; label: string; node: ReactNode }[] = [
   { id: '1', label: '1 · Landing (Continue → song chat)', node: <V3_01_Splash onNext={noop} /> },
-  { id: '2', label: '2 · Song creation chat (LIVE — makes a real song)', node: <WChat /> },
-  { id: '3', label: '3 · Capture email (no price — max emails)', node: <V3_CaptureEmail onBack={noop} onSubmit={noop} savedSong={SAMPLE_SONG} /> },
-  { id: '4', label: '4 · Plan picker ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
-  { id: '5', label: '5 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
-  { id: '6', label: '6 · Success (after RC checkout)', node: <StartSuccessView /> },
+  { id: '2', label: '2 · Song creation chat (LIVE — Q&A)', node: <WChat /> },
+  { id: '3', label: '3 · Email gate — BEFORE we generate (max emails)', node: <V3_CaptureEmail preGen onSubmit={noop} /> },
+  { id: '4', label: '4 · …song generates + they hear it (in chat)', node: <WChat /> },
+  { id: '5', label: '5 · Plan picker ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
+  { id: '6', label: '6 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
+  { id: '7', label: '7 · Success (after RC checkout)', node: <StartSuccessView /> },
 ];
 
 export function OfferCanvas() {
