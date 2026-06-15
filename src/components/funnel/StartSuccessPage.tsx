@@ -1,5 +1,5 @@
 // @ts-nocheck -- ported from the (non-strict) Lovify app repo; web2app funnel code
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import { initMetaPixel, trackPixel, getWebAttribution } from '@/lib/metaPixel';
 import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
@@ -19,17 +19,17 @@ const APP_STORE_URL = 'https://apps.apple.com/us/app/lovify-music-for-your-mind/
 
 // Presentational only — no analytics side-effects, so it's safe to render in
 // the all-screens canvas. The route wrapper below fires the pixel/PostHog.
-export function StartSuccessView() {
+export function StartSuccessView({ membership }: { membership?: boolean } = {}) {
   return (
     <div style={{ height: '100%', minHeight: '100%', background: LOVIFY.bgGradient, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px', textAlign: 'center' }}>
       <div style={{ width: 84, height: 84, borderRadius: 42, background: LOVIFY.orangeGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 18px 32px -10px rgba(216,92,28,0.55)', marginBottom: 24 }}>
         <span style={{ color: '#fff', fontSize: 40 }}>✓</span>
       </div>
       <h1 style={{ margin: 0, fontFamily: SANS, fontSize: 30, fontWeight: 700, color: LOVIFY.ink, letterSpacing: -0.5 }}>
-        You're in! 🎉
+        {membership ? "You're a member! 🎉" : "You're in! 🎉"}
       </h1>
       <p style={{ margin: '14px 0 0', fontFamily: SANS, fontSize: 16.5, lineHeight: 1.5, color: LOVIFY.sub, maxWidth: 380 }}>
-        Your $1 trial is active. Three quick steps to your song:
+        {membership ? 'Your membership is active.' : 'Your $1 trial is active.'} Three quick steps to your song:
       </p>
       <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 380, textAlign: 'left' }}>
         {[
@@ -58,6 +58,9 @@ export function StartSuccessView() {
 }
 
 export default function StartSuccessPage() {
+  // Funnel-aware copy: the /offer funnel charges up front (membership), not a $1
+  // trial. Set after mount (localStorage) to avoid a hydration mismatch.
+  const [membership, setMembership] = useState(false);
   useEffect(() => {
     initMetaPixel();
     // Standard conversion events on return from RC checkout. Purchase carries
@@ -77,6 +80,9 @@ export default function StartSuccessPage() {
     const plan = readLastPlan();
     const value = PLAN_DAY0_PRICE[plan] ?? OFFER_PRICE[offer] ?? variantPrice(variant);
     const funnel = offer || 'standard';
+    // /offer buyers paid up front (annual99 or monthly) — show membership copy,
+    // not the "$1 trial" line. Any non-trial plan counts as a membership.
+    setMembership(offer === 'annual99' || (plan !== '' && plan !== 'yearly_premium_trial'));
     trackPixel('StartTrial', { value: 0, currency: 'USD' }, eventId);
     trackPixel('Purchase', { value, currency: 'USD' }, eventId);
     // PostHog must boot here too — this page is reached by a full redirect
@@ -108,7 +114,7 @@ export default function StartSuccessPage() {
   }, []);
   return (
     <div style={{ height: '100dvh' }}>
-      <StartSuccessView />
+      <StartSuccessView membership={membership} />
     </div>
   );
 }

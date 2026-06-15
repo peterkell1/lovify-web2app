@@ -77,7 +77,7 @@ const SCREENS: { id: string; label: string; node: ReactNode }[] = [
   { id: '2', label: '2 · Song chat — Q&A + email + reveal, all in-chat (LIVE)', node: <WChat collectEmail /> },
   { id: '3', label: '3 · Plan picker ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
   { id: '4', label: '4 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
-  { id: '5', label: '5 · Success (after RC checkout)', node: <StartSuccessView /> },
+  { id: '5', label: '5 · Success (after RC checkout)', node: <StartSuccessView membership /> },
 ];
 
 export function OfferCanvas() {
