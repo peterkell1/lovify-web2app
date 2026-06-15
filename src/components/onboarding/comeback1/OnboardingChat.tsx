@@ -30,11 +30,11 @@ type SlotState = 'idle' | 'working' | 'done' | 'failed';
 type Phase =
   | 'name' | 'detail' | 'scene' | 'why'
   | 'photo' | 'visionScene' | 'sound' | 'voice'
-  | 'writing' | 'lyricsReview' | 'generating';
+  | 'writing' | 'lyricsReview' | 'email' | 'generating';
 
 type InputMode =
   | 'busy' | 'text' | 'photo' | 'visionScene' | 'visionText'
-  | 'soundLoading' | 'sound' | 'voice' | 'writing' | 'lyricsReview'
+  | 'soundLoading' | 'sound' | 'voice' | 'writing' | 'lyricsReview' | 'email'
   // Post-save value bridge: 'ladder' shows the current yes-question chip,
   // 'ladderEnd' shows the final "Keep my song forever →" CTA into the paywall.
   | 'ladder' | 'ladderEnd';
@@ -50,6 +50,7 @@ interface ChatMsg {
 
 export interface ChatResult {
   name: string;
+  email?: string;            // /offer: captured in-chat as the final question
   songAbout: string;
   detail: string;
   scene: string;
@@ -293,8 +294,13 @@ export interface ChatPersist {
 export function V3_Chat({
   genres, onPhoto, onComplete, onBack, persisted, onPersist,
   visionUrl, visionState, songs, songState, songStatusLine, onSave, web, playing, onToggleSound,
+  collectEmail,
 }: {
   genres: string[];
+  // /offer funnel: ask for the email IN-CHAT as the final question (after the
+  // creative questions, before the song is made). Off for the live funnels, so
+  // their chat is unchanged. The email comes back on ChatResult.email.
+  collectEmail?: boolean;
   // Web funnel surface — lets the chat use funnel-specific copy + a header
   // music toggle (the floating one is suppressed on this step on web).
   web?: boolean;
@@ -376,7 +382,7 @@ export function V3_Chat({
 
   // Collected answers (kept in a ref so async generation reads the latest).
   const data = useRef<ChatResult>(persisted?.data ?? {
-    name: '', songAbout: '', detail: '', scene: '', why: '',
+    name: '', email: '', songAbout: '', detail: '', scene: '', why: '',
     soundStyle: '', voice: '', face: null, faces: [], visionScene: '',
     lyrics: '', title: '',
   });
@@ -748,6 +754,7 @@ export function V3_Chat({
   const submitFreeText = () => {
     const value = draft.trim();
     if (!value) return;
+    if (mode === 'email') { submitEmail(value); return; }
     if (mode === 'sound') { setDraft(''); chooseVibeText(value); return; }
     if (mode === 'voice') { setDraft(''); chooseVoice(value); return; }
     if (mode === 'visionScene' || mode === 'visionText') { chooseVisionText(); return; }
@@ -769,22 +776,21 @@ export function V3_Chat({
   // Steps where the bottom text bar is live. Chip steps (about/sound/voice/
   // visionScene) accept a typed answer too; pure loaders/photo do not.
   const textBarActive =
-    mode === 'text' || mode === 'sound' ||
+    mode === 'text' || mode === 'sound' || mode === 'email' ||
     mode === 'voice' || mode === 'visionScene' || mode === 'visionText';
 
   // Placeholder copy tuned to the step so typing feels intentional, not a fallback.
   const textBarPlaceholder =
     phase === 'name' ? 'Type your name…'
+    : mode === 'email' ? 'you@email.com'
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
     : mode === 'visionScene' || mode === 'visionText' ? 'Or describe how you want to look…'
     : SPEECH_OK ? 'Type or tap 🎤 to speak…' : 'Type your answer…';
 
-  // ── Lyrics confirmed (possibly edited) → start the song + reveal INLINE ──
-  const confirmLyrics = () => {
+  // ── Actually make the song: kick off generation in the parent + reveal INLINE ──
+  const startGeneration = () => {
     const d = data.current;
-    d.lyrics = lyricsDraft.trim() || d.lyrics;
-    pushUser('Make my song 🎶');
     setPhase('generating');
     setMode('busy');
     botSay([`Let's make it real. 🎶`], 'busy');
@@ -793,6 +799,36 @@ export function V3_Chat({
     // Kick off the song in the parent, then reveal the vision + songs right here.
     onComplete({ ...d });
     window.setTimeout(() => setRevealed(true), 900);
+  };
+
+  // ── Lyrics confirmed (possibly edited) → make the song. On /offer we ask for
+  //    the email IN-CHAT first (the final question), so the song is created in
+  //    this same window and emailed to them. Other funnels generate straight away.
+  const confirmLyrics = () => {
+    const d = data.current;
+    d.lyrics = lyricsDraft.trim() || d.lyrics;
+    pushUser('Make my song 🎶');
+    if (collectEmail && !d.email) {
+      setPhase('email');
+      setMode('email');
+      botSay([
+        `Love it, ${name || 'friend'}. One last thing before I make it —`,
+        `what's your email? I'll create your song now and send you a copy to keep. 🎶`,
+      ], 'email');
+      return;
+    }
+    startGeneration();
+  };
+
+  // ── Email answered (the final /offer question) → make the song ──
+  const submitEmail = (override?: string) => {
+    const value = (override ?? draft).trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return; // wait for a valid email
+    setDraft('');
+    data.current.email = value;
+    pushUser(value);
+    botSay([`Perfect — sending it to ${value}. 🎶`], 'busy');
+    startGeneration();
   };
 
   // Wipe the whole conversation and replay the opening — a dev/iteration aid so
@@ -808,7 +844,7 @@ export function V3_Chat({
     setStagedFaces([]);
     setLyricsDraft('');
     data.current = {
-      name: '', songAbout: '', detail: '', scene: '', why: '',
+      name: '', email: '', songAbout: '', detail: '', scene: '', why: '',
       soundStyle: '', voice: '', face: null, faces: [], visionScene: '',
       lyrics: '', title: '',
     };
