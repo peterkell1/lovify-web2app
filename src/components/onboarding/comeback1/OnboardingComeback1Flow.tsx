@@ -24,7 +24,7 @@ import {
 } from './screens';
 import { V3_Chat, type ChatPersist } from './OnboardingChat';
 import {
-  generateVisionWithFace, buildVisionPrompt, generateTwoSongs,
+  generateVisionWithFace, buildVisionPrompt, generateTwoSongs, sendSongEmail,
   type GeneratedSong,
 } from '@/components/onboarding/v3/generation';
 import { useRouter } from 'next/navigation';
@@ -424,7 +424,15 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       else if (s === 'streaming') setSongStatusLine('Almost ready…');
       else setSongStatusLine('Composing your melody…');
     })
-      .then((finished) => { setSongs(finished); setSongState('done'); })
+      .then((finished) => {
+        setSongs(finished);
+        setSongState('done');
+        // /offer: deliver on the gate's promise — email them a copy of their
+        // song. Fire-and-forget; uses the song hosted on our storage.
+        if (offer === 'annual99' && offerEmailRef.current && finished[0]?.audio_url) {
+          void sendSongEmail({ email: offerEmailRef.current, title: finished[0].title || title, songUrl: finished[0].audio_url });
+        }
+      })
       .catch(() => setSongState('failed'));
   }, [songState, offer]);
 

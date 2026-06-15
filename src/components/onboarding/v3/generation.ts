@@ -48,6 +48,18 @@ async function authedFetch(fnName: string, body: unknown): Promise<Response> {
   throw new Error(`${fnName} failed`);
 }
 
+/** Email the visitor a copy of the song they just made (the /offer gate's
+ * promise). Fire-and-forget: a delivery hiccup must never break the reveal.
+ * The function only emails songs hosted on our own storage (see send-song-email). */
+export async function sendSongEmail(req: { email: string; title: string; songUrl: string }): Promise<void> {
+  if (!req.email || !req.songUrl) return;
+  try {
+    await authedFetch('send-song-email', { email: req.email, title: req.title, songUrl: req.songUrl });
+  } catch {
+    /* best-effort — the song still shows in the funnel regardless */
+  }
+}
+
 // ─── 1. Sound styles ────────────────────────────────────────────
 // suggest-song-styles ← { conversationContext, previouslySuggestedVibes?, regenerateCount? }
 //                     → { vibes: [{ name, description, genre, emoji }], source }
