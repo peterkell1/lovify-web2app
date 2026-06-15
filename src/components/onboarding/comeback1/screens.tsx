@@ -3933,7 +3933,7 @@ export function V3_CaptureEmail({ onBack, onSubmit, savedSong }: NavProps & {
     <LovScreen>
       <LovBack onClick={onBack} />
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 22px 18px' }}>
-        <h1 style={{ textAlign: 'center', margin: '6px 0 4px', fontFamily: SERIF, fontWeight: 700, fontSize: 25, color: LOVIFY.ink }}>
+        <h1 style={{ textAlign: 'center', margin: '6px 0 4px', fontFamily: SANS, fontWeight: 800, fontSize: 26, letterSpacing: -0.6, lineHeight: 1.15, color: LOVIFY.ink }}>
           Your song is ready 🎶
         </h1>
         <p style={{ textAlign: 'center', margin: '0 0 18px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.45, color: LOVIFY.sub }}>
@@ -3984,7 +3984,7 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong, email }: NavProps
     <LovScreen>
       <LovBack onClick={onBack} />
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 22px 18px' }}>
-        <h1 style={{ textAlign: 'center', margin: '6px 0 4px', fontFamily: SERIF, fontWeight: 700, fontSize: 25, color: LOVIFY.ink }}>
+        <h1 style={{ textAlign: 'center', margin: '6px 0 4px', fontFamily: SANS, fontWeight: 800, fontSize: 26, letterSpacing: -0.6, lineHeight: 1.15, color: LOVIFY.ink }}>
           Save your song
         </h1>
         <p style={{ textAlign: 'center', margin: '0 0 16px', fontFamily: SANS, fontSize: 14.5, lineHeight: 1.45, color: LOVIFY.sub }}>
