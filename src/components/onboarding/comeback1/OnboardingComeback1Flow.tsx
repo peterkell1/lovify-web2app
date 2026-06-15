@@ -632,7 +632,6 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
         playing={playing}
         onToggleSound={() => setSound((s) => !s)}
         genres={state.genres}
-        collectEmail={offer === 'annual99'}
         persisted={chatRef.current}
         onPersist={(s) => { chatRef.current = s; setChatTick((t) => t + 1); }}
         visionUrl={visionUrl} visionState={visionState}
