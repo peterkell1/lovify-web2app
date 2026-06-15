@@ -77,13 +77,18 @@ const WEB_STEP_IDS_B = [
   'paywall_price', 'create_account',
 ] as const;
 
-// The standalone offer funnel (route /offer): landing → song-creation chat. When
-// the chat finishes its Q&A, an EMAIL GATE pops up BEFORE we generate (max
-// emails + the email is functional: we send them their finished song). They then
-// HEAR it free, and only pay to keep it → plan picker ($17.99/mo or $89.99/yr) →
-// account. The gate is offer-only; the shared chat is otherwise untouched.
+// The standalone offer funnel (route /offer) — "v2". Keeps the full persuasion
+// arc (hook → proof → "you can turn anything into a song"), which retained ~76%
+// in the live data, then goes STRAIGHT to making the song. Cuts the parts that
+// leaked or are redundant for warm video-ad traffic: the demo, the genre/time
+// preference quiz, and the old 5-paywall stack (collapsed to one offer). The
+// song chat asks for the email in-conversation and renders with Suno; they hear
+// it free, then pay to keep it (single $17.99/mo or $89.99/yr offer) → account.
 const WEB_STEP_IDS_ANNUAL99 = [
-  'home', 'song_chat', 'order_annual99', 'create_account',
+  'home', 'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
+  'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
+  'proof_music_negative', 'proof_more_depressed', 'the_turn', 'song_ideas',
+  'make_first_song', 'song_chat', 'order_annual99', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
