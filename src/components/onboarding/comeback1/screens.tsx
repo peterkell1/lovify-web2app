@@ -3939,7 +3939,7 @@ const TRIAL_BENEFITS: { icon: string; t: string; d: string }[] = [
 // Shown after the song chat: capture email (so a Lead pixel fires + abandoners
 // stay reachable), pick a plan ($89.99/yr up front or $17.99/mo), → RC checkout.
 const OFFER_PLANS = [
-  { id: 'annual99', name: 'Annual', price: '$89.99', per: '/year', sub: 'Billed today · best value', badge: 'SAVE 58%' },
+  { id: 'annual99', name: 'Annual', price: '$99', per: '/year', sub: 'Billed today · best value', badge: 'SAVE 54%' },
   { id: 'monthly', name: 'Monthly', price: '$17.99', per: '/month', sub: 'Billed today · cancel anytime', badge: '' },
 ] as const;
 // Email capture for the /offer funnel. Two modes:
