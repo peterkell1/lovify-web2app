@@ -289,7 +289,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     capturePostHogEvent('onboarding_step_viewed', {
       flow: 'onboarding_comeback1', surface, step_id: stepId, step_index: step, total_steps: TOTAL,
     });
-    if (stepId === 'paywall_benefits') {
+    // Fire the paywall-entry events on whichever paywall step THIS funnel reaches
+    // FIRST — Funnel A's stack starts at 'paywall_benefits', but the short Funnel
+    // B enters straight at 'paywall_price'. Hardcoding 'paywall_benefits' meant B
+    // never registered a paywall view (it has no benefits step), so the A/B test
+    // read B as 0% paywall. `find` returns A's first paywall (benefits) and B's
+    // first (price), so each funnel fires exactly once on its real entry paywall.
+    const firstPaywallStep = stepIds.find((id) => id.startsWith('paywall_'));
+    if (firstPaywallStep && stepId === firstPaywallStep) {
       // Fires PostHog paywall_shown + native FB/AppsFlyer (app side).
       trackPaywallShown({ source: 'onboarding_trial' });
       // Web funnel: the native FB SDK no-ops on web, so fire the browser pixel
