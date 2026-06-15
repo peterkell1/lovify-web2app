@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
-import { V3_01_Splash, V3_CaptureEmail, V3_OrderAnnual99, V3_CreateAccount } from './screens';
+import { V3_01_Splash, V3_OrderAnnual99, V3_CreateAccount } from './screens';
 import { V3_Chat } from './OnboardingChat';
 import {
   generateVisionWithFace, buildVisionPrompt, startSong, pollSong, type GeneratedSong,
@@ -25,7 +25,7 @@ const SAMPLE_SONG = { cover: null, title: 'Peaceful and Energized' };
 // The song-creation chat — the magic moment of the /offer funnel. Self-runs its
 // intro; in the canvas it shows the opening state, and completing it fires a
 // REAL song generation (same as the live funnel). Mirrors /comeback1/canvas.
-function WChat() {
+function WChat({ collectEmail }: { collectEmail?: boolean }) {
   const [visionUrl, setVisionUrl] = useState<string | null>(null);
   const [visionState, setVisionState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle');
   const [song, setSong] = useState<GeneratedSong | null>(null);
@@ -57,6 +57,7 @@ function WChat() {
           .then((finished) => { setSong(finished); setSongState('done'); })
           .catch(() => setSongState('failed'));
       }}
+      collectEmail={collectEmail}
       visionUrl={visionUrl}
       visionState={visionState}
       song={song}
@@ -73,12 +74,10 @@ const FRAME_H = 736;
 
 const SCREENS: { id: string; label: string; node: ReactNode }[] = [
   { id: '1', label: '1 · Landing (Continue → song chat)', node: <V3_01_Splash onNext={noop} /> },
-  { id: '2', label: '2 · Song creation chat (LIVE — Q&A)', node: <WChat /> },
-  { id: '3', label: '3 · Email gate — BEFORE we generate (max emails)', node: <V3_CaptureEmail preGen onSubmit={noop} /> },
-  { id: '4', label: '4 · …song generates + they hear it (in chat)', node: <WChat /> },
-  { id: '5', label: '5 · Plan picker ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
-  { id: '6', label: '6 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
-  { id: '7', label: '7 · Success (after RC checkout)', node: <StartSuccessView /> },
+  { id: '2', label: '2 · Song chat — Q&A + email + reveal, all in-chat (LIVE)', node: <WChat collectEmail /> },
+  { id: '3', label: '3 · Plan picker ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
+  { id: '4', label: '4 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
+  { id: '5', label: '5 · Success (after RC checkout)', node: <StartSuccessView /> },
 ];
 
 export function OfferCanvas() {
