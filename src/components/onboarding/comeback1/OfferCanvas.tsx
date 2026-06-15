@@ -1,40 +1,83 @@
 // @ts-nocheck -- preview/QA canvas (not part of the live funnel)
 /* Lovify /offer funnel — review canvas.
- * Renders the standalone /offer screens (email-first capture → plan picker →
- * success) at once in labelled phone frames, with sample data, so the upfront
- * "save your song" flow can be scanned at a glance. Preview/QA only — lives at
- * /offer/canvas. The real funnel is /offer. */
+ * Renders the WHOLE standalone /offer flow at once in labelled phone frames, in
+ * the real step order: landing → song-creation chat → email capture → plan
+ * picker → create account → success. The /offer funnel is deliberately short
+ * (it skips the long quiz/story arc), so this is the entire thing. Preview/QA
+ * only — lives at /offer/canvas. The real funnel is /offer. */
 
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
-import { V3_CaptureEmail, V3_OrderAnnual99 } from './screens';
+import { V3_01_Splash, V3_CaptureEmail, V3_OrderAnnual99, V3_CreateAccount } from './screens';
+import { V3_Chat } from './OnboardingChat';
+import {
+  generateVisionWithFace, buildVisionPrompt, startSong, pollSong, type GeneratedSong,
+} from '@/components/onboarding/v3/generation';
 import { StartSuccessView } from '@/components/funnel/StartSuccessPage';
 
 const noop = () => {};
 
-// A finished song to populate the reward card (mirrors what the real flow
-// passes after the song reveal).
+// A finished song to populate the reward card on the save screens (mirrors what
+// the real flow passes after the song reveal).
 const SAMPLE_SONG = { cover: null, title: 'Peaceful and Energized' };
+
+// The song-creation chat — the magic moment of the /offer funnel. Self-runs its
+// intro; in the canvas it shows the opening state, and completing it fires a
+// REAL song generation (same as the live funnel). Mirrors /comeback1/canvas.
+function WChat() {
+  const [visionUrl, setVisionUrl] = useState<string | null>(null);
+  const [visionState, setVisionState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle');
+  const [song, setSong] = useState<GeneratedSong | null>(null);
+  const [songState, setSongState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle');
+  const [statusLine, setStatusLine] = useState('Composing your melody…');
+  return (
+    <V3_Chat
+      web
+      genres={['Pop', 'R&B', 'Soul']}
+      onPhoto={(face, ctx) => {
+        setVisionState('working');
+        const prompt = buildVisionPrompt({
+          songAbout: ctx.songAbout,
+          scene: ctx.visionScene || ctx.scene,
+          detailText: ctx.detail,
+        });
+        generateVisionWithFace(prompt, face, ctx.songAbout || 'Your Vision', '9:16')
+          .then((u) => { setVisionUrl(u); setVisionState('done'); })
+          .catch(() => setVisionState('failed'));
+      }}
+      onComplete={(r) => {
+        setSongState('working');
+        // The /offer funnel renders with Suno; the canvas uses the default
+        // provider — it's only here to preview the chat UI, not the audio.
+        startSong({ lyrics: r.lyrics, title: r.title, style: r.soundStyle, voice: r.voice })
+          .then((tid) => pollSong(tid, (s) => {
+            setStatusLine(s === 'tuning' ? 'Tuning every word to you…' : s === 'streaming' ? 'Almost ready…' : 'Composing your melody…');
+          }))
+          .then((finished) => { setSong(finished); setSongState('done'); })
+          .catch(() => setSongState('failed'));
+      }}
+      visionUrl={visionUrl}
+      visionState={visionState}
+      song={song}
+      songState={songState}
+      songStatusLine={statusLine}
+      onSave={noop}
+      onBack={noop}
+    />
+  );
+}
 
 const FRAME_W = 340;
 const FRAME_H = 736;
 
 const SCREENS: { id: string; label: string; node: ReactNode }[] = [
-  {
-    id: '1',
-    label: '1 · Capture email (no price — max emails)',
-    node: <V3_CaptureEmail onBack={noop} onSubmit={noop} savedSong={SAMPLE_SONG} />,
-  },
-  {
-    id: '2',
-    label: '2 · Plan picker ($89.99/yr · $17.99/mo)',
-    node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" />,
-  },
-  {
-    id: '3',
-    label: '3 · Success (after RC checkout)',
-    node: <StartSuccessView />,
-  },
+  { id: '1', label: '1 · Landing (Continue → song chat)', node: <V3_01_Splash onNext={noop} /> },
+  { id: '2', label: '2 · Song creation chat (LIVE — makes a real song)', node: <WChat /> },
+  { id: '3', label: '3 · Capture email (no price — max emails)', node: <V3_CaptureEmail onBack={noop} onSubmit={noop} savedSong={SAMPLE_SONG} /> },
+  { id: '4', label: '4 · Plan picker ($89.99/yr · $17.99/mo)', node: <V3_OrderAnnual99 onBack={noop} onOrder={noop} savedSong={SAMPLE_SONG} email="you@email.com" /> },
+  { id: '5', label: '5 · Create account (song saves)', node: <V3_CreateAccount onNext={noop} onBack={noop} /> },
+  { id: '6', label: '6 · Success (after RC checkout)', node: <StartSuccessView /> },
 ];
 
 export function OfferCanvas() {
@@ -46,7 +89,7 @@ export function OfferCanvas() {
             Lovify · /offer funnel
           </h1>
           <p style={{ margin: '6px 0 0', fontFamily: SANS, fontSize: 14, color: LOVIFY.sub }}>
-            Email-first save flow. Every screen is live — type in the fields to try them.
+            {SCREENS.length} screens · landing → song chat → email → plans → account → success. Every screen is live.
           </p>
         </div>
 
