@@ -29,7 +29,7 @@ import {
 } from '@/components/onboarding/v3/generation';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
+import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant, registerFunnel } from '@/lib/posthog';
 import { getFunnelVariant } from '@/lib/funnelVariant';
 import { setFunnelOffer } from '@/lib/funnelOffer';
 import { trackPaywallShown, trackPaywallCompleted } from '@/lib/track';
@@ -185,6 +185,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     // Stamp the A/B arm on every PostHog event this session, so EPC and the
     // whole funnel can be broken down per variant.
     registerFunnelVariant(variant);
+    // Stamp WHICH funnel ('annual99' = /offer, else 'standard') on every event,
+    // so PostHog can build /offer's per-step funnel in isolation.
+    registerFunnel(offer || 'standard');
     if (!landedRef.current) {
       landedRef.current = true;
       capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1', funnel_variant: variant, funnel: offer || 'standard' });
@@ -523,7 +526,11 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       // we go to /start/success (fires purchase_completed + the success UI).
       if (offer === 'annual99' && rcWebBillingConfigured()) {
         const result = await rcWebPurchase({ planId, appUserId: sessionIdRef.current, email: opts?.email });
-        if (result === 'success') window.location.href = `${window.location.origin}/start/success`;
+        if (result === 'success') { window.location.href = `${window.location.origin}/start/success`; }
+        else {
+          // Track payment-sheet drop-off so it's visible in the funnel.
+          capturePostHogEvent(result === 'cancelled' ? 'checkout_cancelled' : 'checkout_failed', { surface: 'web', plan_id: planId });
+        }
         return; // cancelled / error → stay on the funnel so they can retry
       }
       // Preferred: hand off to RevenueCat's hosted Web Billing checkout (the $1
