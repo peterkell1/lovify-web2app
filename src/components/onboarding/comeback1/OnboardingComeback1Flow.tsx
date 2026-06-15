@@ -77,16 +77,11 @@ const WEB_STEP_IDS_B = [
   'paywall_price', 'create_account',
 ] as const;
 
-// The standalone "$99/year upfront" offer funnel (route /offer). The current
-// web flow (make song → hear it), but the 5 $1-trial paywalls are replaced by a
-// single $99/year order page that captures email first, then → RC checkout.
+// The standalone offer funnel (route /offer): dead simple — landing → STRAIGHT
+// into the song-creation chat (the magic moment) → a "save your song"
+// membership order page (email capture, then $17.99/mo or $89.99/yr up front).
 const WEB_STEP_IDS_ANNUAL99 = [
-  'home', 'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
-  'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
-  'proof_music_negative', 'proof_more_depressed', 'the_turn',
-  'song_ideas', 'demo_chat', 'time', 'time_reassurance', 'when_you_listen',
-  'genres', 'make_first_song', 'song_chat',
-  'order_annual99', 'create_account',
+  'home', 'song_chat', 'order_annual99', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
@@ -412,14 +407,17 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     setSongStatusLine('Composing your melody…');
     // Kick off TWO independent generations so the two version cards play two
     // genuinely different takes (not the same file twice).
-    generateTwoSongs({ lyrics, title, style, voice }, (s) => {
+    // The standalone /offer funnel renders with Suno (Kie.ai) for a higher-wow
+    // song to justify the upfront price; the live funnels stay on the default.
+    const model = offer === 'annual99' ? 'suno' : undefined;
+    generateTwoSongs({ lyrics, title, style, voice, model }, (s) => {
       if (s === 'tuning') setSongStatusLine('Tuning every word to you…');
       else if (s === 'streaming') setSongStatusLine('Almost ready…');
       else setSongStatusLine('Composing your melody…');
     })
       .then((finished) => { setSongs(finished); setSongState('done'); })
       .catch(() => setSongState('failed'));
-  }, [songState]);
+  }, [songState, offer]);
 
   // ── Stage the SAVED song against the session (Phase 2/4) ──
   // The user taps Save on the version they want; stage THAT one (plus the
@@ -466,6 +464,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     // Web funnel (web-to-app): redirect to Stripe Checkout (Stripe-first, no
     // account yet). On success Stripe sends the user to /start/success.
     if (mode === 'web') {
+      // Stash the plan so /start/success — reached after the off-domain RC
+      // redirect — can report the right day-0 value ($17.99 / $89.99 / $1 trial).
+      try { localStorage.setItem('lov-last-plan', planId); } catch { /* ignore */ }
       capturePostHogEvent('web_checkout_started', { surface: 'web', plan_id: planId });
       // Canonical funnel-step name the ads dashboard builds its funnel on.
       capturePostHogEvent('checkout_started', { surface: 'web', plan_id: planId });
@@ -627,13 +628,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       // (which would otherwise skip payment into create_account). A keeps it.
       case 'paywall_price': return <V3_TrialPrice onNext={next} onBack={back} onBuy={buyPlan} soloPaywall={variant === 'B'} />;
       case 'paywall_plans': return <V3_23_Paywall onNext={next} onBack={back} onBuy={buyPlan} />;
-      // The $99/year offer funnel's single order page: capture email → fire
-      // Lead pixel + email_captured → RC checkout for the annual99 package.
+      // The offer funnel's "save your song" membership page: capture email →
+      // fire Lead pixel + email_captured → RC checkout for the chosen plan
+      // ($17.99/mo = existing 'monthly'; $89.99/yr up front = 'annual99').
       case 'order_annual99': return <V3_OrderAnnual99
         onBack={back}
-        onOrder={(email: string) => {
-          capturePostHogEvent('email_captured', { flow: 'onboarding_comeback1', funnel: 'annual99' });
-          buyPlan('annual99', { email });
+        onOrder={(email: string, planId: string) => {
+          capturePostHogEvent('email_captured', { flow: 'onboarding_comeback1', funnel: 'annual99', plan_id: planId });
+          buyPlan(planId, { email });
         }}
         savedSong={(() => {
           const picked = songs[state.savedVersion ?? 0] ?? songs[0];

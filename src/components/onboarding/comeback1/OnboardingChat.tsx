@@ -888,13 +888,8 @@ export function V3_Chat({
 
       {/* Transcript */}
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 16px 8px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-        {/* Spacer pushes a short transcript to the BOTTOM so the latest question
-            sits right above the input (like iMessage). Without this, one or two
-            messages stick to the top and slide behind the header when the
-            keyboard opens — the user can't see the question they're answering.
-            Collapses to nothing once the transcript overflows, so scrolling up
-            still reaches the top. */}
-        <div aria-hidden style={{ marginTop: 'auto' }} />
+        {/* Messages flow from the TOP (natural chat fill); scrollToEnd keeps the
+            newest visible as the conversation grows / when the keyboard opens. */}
         {/* Before the reveal: the whole conversation. After it: only the
             messages up to the reveal point — the rest render below the song
             card (see the post-reveal slice further down). */}
