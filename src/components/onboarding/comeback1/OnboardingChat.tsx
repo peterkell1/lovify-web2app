@@ -291,9 +291,14 @@ export interface ChatPersist {
   done: boolean; // true once lyrics finished and we handed off to the reveal
 }
 
+// Max height of the auto-growing composer before it scrolls internally. Tall
+// enough to show ~7 lines, so a dictated / typed multi-sentence answer stays
+// readable instead of hiding in a one-line box.
+const INPUT_MAX_H = 200;
+
 export function V3_Chat({
   genres, onPhoto, onComplete, onBack, persisted, onPersist,
-  visionUrl, visionState, songs, songState, songStatusLine, onSave, web, playing, onToggleSound,
+  visionUrl, visionState, songs, songState, songStatusLine, onSave, web, playing, onToggleSound, onMuteSound,
   collectEmail,
 }: {
   genres: string[];
@@ -306,6 +311,8 @@ export function V3_Chat({
   web?: boolean;
   playing?: boolean;
   onToggleSound?: () => void;
+  // Force the ambient music off (used when the mic starts — see MicButton).
+  onMuteSound?: () => void;
   // Called once the user picks their image look, with the primary face + the
   // chosen visual scene, so the parent can pre-warm the vision image while the
   // rest of the chat (sound/voice/lyrics) continues.
@@ -397,7 +404,15 @@ export function V3_Chat({
   const doneRef = useRef(persisted?.done ?? false);
   // Collapse the auto-grown textarea back to one line once the draft is sent.
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { if (!draft && inputRef.current) inputRef.current.style.height = 'auto'; }, [draft]);
+  // Keep the textarea sized to its content on EVERY draft change — not just on
+  // keystrokes. Mic dictation appends via setDraft (no input event fires), so
+  // without this the box stayed one line tall and hid everything the user spoke.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    if (draft) el.style.height = `${Math.min(el.scrollHeight, INPUT_MAX_H)}px`;
+  }, [draft]);
   const nid = () => `m${idRef.current++}`;
   const scrollRef = useRef<HTMLDivElement>(null);
   // When the on-screen keyboard is open we shrink the chat to the VISUAL
@@ -1162,7 +1177,7 @@ export function V3_Chat({
                 setDraft(e.target.value);
                 const el = e.target as HTMLTextAreaElement;
                 el.style.height = 'auto';
-                el.style.height = `${Math.min(el.scrollHeight, 124)}px`;
+                el.style.height = `${Math.min(el.scrollHeight, INPUT_MAX_H)}px`;
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -1183,10 +1198,10 @@ export function V3_Chat({
                 // 16px minimum: anything smaller makes iOS Safari auto-zoom the
                 // page on focus, which knocks the whole layout off-center.
                 fontFamily: SANS, fontSize: 16, lineHeight: 1.45, color: LOVIFY.ink, outline: 'none',
-                resize: 'none', overflowY: 'auto', maxHeight: 124,
+                resize: 'none', overflowY: 'auto', maxHeight: INPUT_MAX_H,
               }}
             />
-            {phase !== 'name' && <MicButton onResult={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)} />}
+            {phase !== 'name' && <MicButton onStart={onMuteSound} onResult={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)} />}
             <button
               onClick={sendOrContinue}
               disabled={!sendActive()}
@@ -1257,7 +1272,7 @@ export function V3_Chat({
 // logic below (continuous + onend restart while listening) keeps the mic going
 // until the user actually stops it — i.e. the mic IS offered on iOS, where
 // webkitSpeechRecognition exists, matching the live funnel's behavior.
-function MicButton({ onResult, disabled }: { onResult: (t: string) => void; disabled?: boolean }) {
+function MicButton({ onResult, onStart, disabled }: { onResult: (t: string) => void; onStart?: () => void; disabled?: boolean }) {
   const [listening, setListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
@@ -1277,6 +1292,9 @@ function MicButton({ onResult, disabled }: { onResult: (t: string) => void; disa
       setListening(false);
       return;
     }
+    // Kill the ambient music the moment recording starts, so the user's voice
+    // isn't competing with (or startled by) the soundtrack suddenly playing.
+    onStart?.();
     try {
       const rec = new SR();
       rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = true;
@@ -1501,12 +1519,18 @@ function ChatReveal({
   // Start BUFFERING each take the moment its URL arrives — not on tap — so by
   // the time the user presses play it's already streaming and starts fast
   // (it was taking 20-30s because nothing loaded until the tap).
-  const preloadedRef = useRef<Set<number>>(new Set());
+  // Track the URL we last loaded per slot (NOT just "loaded once"): the reveal
+  // shows the temporary STREAM url first, then hot-swaps to the permanent file —
+  // a src change the <audio> element won't pick up without a fresh load(). Keying
+  // off the URL re-loads on the swap, so play() doesn't sit forever on a stale
+  // source that never plays.
+  const preloadedRef = useRef<Map<number, string>>(new Map());
   useEffect(() => {
     [0, 1].forEach((n) => {
-      if (songState === 'done' && songs[n]?.audio_url && !preloadedRef.current.has(n)) {
+      const url = songs[n]?.audio_url;
+      if (songState === 'done' && url && preloadedRef.current.get(n) !== url) {
         const a = audioRefs.current[n];
-        if (a) { try { a.load(); } catch { /* ignore */ } preloadedRef.current.add(n); }
+        if (a) { try { a.load(); } catch { /* ignore */ } preloadedRef.current.set(n, url); }
       }
     });
   }, [songState, songs]);
