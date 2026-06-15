@@ -92,7 +92,7 @@ const FRAME_W = 340;
 const FRAME_H = 736;
 
 const SCREENS: { id: string; label: string; node: ReactNode }[] = [
-  { id: '01', label: '01 · Hook (opener — loops benefits, no auto-advance, no back)', node: <V3_DrugHook opener onNext={noop} onBack={noop} onSkip={noop} /> },
+  { id: '01', label: '01 · Hook (opener — loops benefits, music top-right, no back)', node: <V3_DrugHook opener sound onToggleSound={noop} onNext={noop} onBack={noop} onSkip={noop} /> },
   { id: '03', label: '03 · Reveal: it’s music', node: <V3_DrugReveal onNext={noop} onBack={noop} /> },
   { id: '04', label: '04 · Discovery', node: <V3_Discovery onNext={noop} onBack={noop} /> },
   { id: '05', label: '05 · Music changes who you become', node: <V3_Science onNext={noop} onBack={noop} /> },
