@@ -19,6 +19,9 @@ export const publicEnv = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
   stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+  // RevenueCat Web Billing public API key (rcb_…) for the in-page purchases-js
+  // checkout. Public-safe (ships to the browser like a Stripe publishable key).
+  rcWebBillingKey: process.env.NEXT_PUBLIC_RC_WEB_BILLING_KEY ?? "",
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
 };
 

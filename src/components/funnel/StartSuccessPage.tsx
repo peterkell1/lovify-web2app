@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import { initMetaPixel, trackPixel, getWebAttribution } from '@/lib/metaPixel';
-import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant } from '@/lib/posthog';
+import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant, registerFunnel } from '@/lib/posthog';
 import { readFunnelVariant, variantPrice } from '@/lib/funnelVariant';
 import { readFunnelOffer, OFFER_PRICE, PLAN_DAY0_PRICE, readLastPlan } from '@/lib/funnelOffer';
 import { readOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
@@ -92,6 +92,7 @@ export default function StartSuccessPage() {
     initPostHog();
     registerAdAttribution();
     registerFunnelVariant(variant);
+    registerFunnel(funnel);
     capturePostHogEvent('web_trial_started', { surface: 'web' });
     // Canonical conversion event the ads dashboard builds its funnel on.
     capturePostHogEvent('purchase_completed', { surface: 'web', value, currency: 'USD', funnel_variant: variant, funnel });

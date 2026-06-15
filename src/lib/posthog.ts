@@ -148,6 +148,20 @@ export function registerFunnelVariant(variant: string): void {
 }
 
 /**
+ * Register which FUNNEL the visitor is in ('annual99' for /offer, 'standard' for
+ * the live $1 funnels) as a super-property, so EVERY event — funnel_landed →
+ * each onboarding_step_viewed → email_captured → checkout_started →
+ * purchase_completed — carries `funnel`. That's what lets PostHog build a clean
+ * per-step funnel for /offer in isolation (otherwise its step events look
+ * identical to the live funnel's, since both use flow='onboarding_comeback1').
+ */
+export function registerFunnel(funnel: string): void {
+  if (typeof window === 'undefined' || !funnel) return;
+  if (!initialized) { deferUntilVisible(() => registerFunnel(funnel)); return; }
+  try { posthog.register({ funnel }); } catch { /* ignore */ }
+}
+
+/**
  * Link the anonymous distinct_id to the authenticated user. Call once on
  * sign-in. PostHog merges the anonymous events into the identified person
  * so pre-signup activity stays attached to the user.
