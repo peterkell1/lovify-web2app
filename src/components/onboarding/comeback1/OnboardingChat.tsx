@@ -24,6 +24,7 @@ import {
 } from '@/components/onboarding/v3/generation';
 import type { GeneratedSong } from '@/components/onboarding/v3/generation';
 import { VoiceDump } from './VoiceDump';
+import { VibePicker } from './VibePicker';
 import { publicEnv } from '@/lib/env';
 
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
@@ -774,9 +775,12 @@ export function V3_Chat({
   };
 
   // ── Sound vibe chosen (chip) or free-typed style ──
-  const chooseVibe = (v: SoundVibe) => {
-    data.current.soundStyle = v.description ? `${v.name} — ${v.description}` : v.name;
-    pushUser(v.name);
+  // V2 can pass optional "flavor" refiners that shape the sound — woven into the
+  // style string the song engine reads, so the user customizes beyond the 4 vibes.
+  const chooseVibe = (v: SoundVibe, refiners: string[] = []) => {
+    const base = v.description ? `${v.name} — ${v.description}` : v.name;
+    data.current.soundStyle = refiners.length ? `${base} — with a ${refiners.join(', ').toLowerCase()} feel` : base;
+    pushUser(refiners.length ? `${v.name} · ${refiners.join(' · ')}` : v.name);
     setPhase('voice');
     botSay([`${v.name} — gorgeous choice.`, 'Last thing: who should sing it?'], 'voice');
   };
@@ -1160,11 +1164,21 @@ export function V3_Chat({
         )}
 
         {mode === 'sound' && (
-          <ChoiceList hint>
-            {vibes.map((v) => (
-              <Choice key={v.name} onClick={() => chooseVibe(v)} sub={v.description}>{v.emoji}  {v.name}</Choice>
-            ))}
-          </ChoiceList>
+          variant === 'v2' ? (
+            <VibePicker
+              vibes={vibes}
+              onPreview={onMuteSound}
+              onPick={(v, refiners) => chooseVibe(v, refiners)}
+              onPreviewPlayed={(genre) => capturePostHogEvent('genre_preview_played', { flow: 'onboarding_comeback1', genre })}
+              onRefiner={(label) => capturePostHogEvent('style_refiner_used', { flow: 'onboarding_comeback1', refiner: label })}
+            />
+          ) : (
+            <ChoiceList hint>
+              {vibes.map((v) => (
+                <Choice key={v.name} onClick={() => chooseVibe(v)} sub={v.description}>{v.emoji}  {v.name}</Choice>
+              ))}
+            </ChoiceList>
+          )
         )}
 
         {mode === 'voice' && (
