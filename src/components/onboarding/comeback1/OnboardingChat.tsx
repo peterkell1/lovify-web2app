@@ -289,6 +289,40 @@ function buildDreamLyricsPrompt(a: { name: string; dream: string; scenes: string
   ].filter((l, i) => l !== '' || i > 0).join('\n');
 }
 
+// V2 lyric engine (song-chat test). Marries the award-winning-songwriter craft
+// brief (the spirit of Charlie Puth / Ed Sheeran / Dua Lipa + strict structure,
+// rhyme schemes and a disciplined repeatable hook) with the three things that
+// make a lyric CONVERT: it's unmistakably THEIRS (their literal words + name),
+// it rides the where-I-am → the-turn → who-I-become arc, and it leans hard into
+// identity/affirmation ("I am…") lines — the belief-rewiring that justifies the
+// membership. Sent verbatim as the creative-assistant user message via
+// promptOverride, so we can A/B it without an edge-function deploy.
+function buildSongwriterLyricsPromptV2(a: { name: string; dream: string; scenes: string; why: string }): string {
+  const name = (a.name || '').trim();
+  return [
+    'You are an award-winning pop songwriter. Write original, emotionally specific lyrics that make ME feel like I have ALREADY become the person living the life below.',
+    '',
+    'WHAT THE SONG IS ABOUT — use MY words, MY images and MY name; never generic stock scenes:',
+    `• My dream / the life I most want to live: ${a.dream}`,
+    `• The specific scenes of that life: ${a.scenes}`,
+    `• Why it matters so much to me: ${a.why}`,
+    name ? `• My name: ${name}` : '',
+    '',
+    'CRAFT — write with the melodic, hook-driven craft of modern pop in the spirit of Charlie Puth, Ed Sheeran and Dua Lipa: conversational, vivid, with a memorable, repeatable chorus hook. Avoid clichés and filler.',
+    '',
+    'MEANING — this is an identity song. Take me on the arc of where I am → the turn → who I become. Write in present tense, first person, as if I am already living it. Weave in the beliefs and identity I must own to live this life, including direct "I am…" affirmation lines I can sing to myself. If I described a problem, sing only the life on the OTHER side of it — never the problem itself.',
+    '',
+    'STRUCTURE — use these sections in this exact order, each on its own line as a tag: [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro]. Follow these rules exactly:',
+    '• Each Verse is exactly 4 lines, rhyme scheme A B A B.',
+    '• Each Pre-Chorus is exactly 2 lines, rhyme scheme A A, building tension into the chorus.',
+    '• Each Chorus is exactly 4 lines, rhyme scheme A A B B, the SAME words every time, built around one short title hook (2–5 words).',
+    '• The Bridge is 2 to 4 lines.',
+    '',
+    'Output ONLY the section tags and lyrics — no production notes, no commentary, no "download"/app-store or advertising language.',
+    'Write my song now.',
+  ].filter((l, i) => l !== '' || i > 0).join('\n');
+}
+
 function fallbackLyrics(detail: string, why: string): string {
   const a = shortQuote(detail) || 'this life I see';
   const b = shortQuote(why) || 'everything I am';
@@ -766,7 +800,10 @@ export function V3_Chat({
     generateLyrics({
       songAbout: d.songAbout, detailText: d.detail, scene: d.scene, why: d.why,
       style: d.soundStyle, voice: d.voice, genres,
-      promptOverride: buildDreamLyricsPrompt({
+      // V2 swaps in the award-winning-songwriter lyric engine (craft + structure
+      // + identity arc). v1 keeps the current Taylor-Swift-reorg prompt. Both go
+      // in as the user message, so it's a clean head-to-head with no edge deploy.
+      promptOverride: (variant === 'v2' ? buildSongwriterLyricsPromptV2 : buildDreamLyricsPrompt)({
         name: d.name, dream: d.detail, scenes: d.scene, why: d.why,
       }),
     })
