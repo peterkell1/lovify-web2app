@@ -20,7 +20,7 @@ import { LOVIFY, SANS, SERIF } from '@/components/onboarding/v3/theme';
 import { LovLogo } from '@/components/onboarding/v3/primitives';
 import { capturePostHogEvent } from '@/lib/posthog';
 import {
-  suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe,
+  suggestSoundStyles, buildStyleContext, generateLyrics, suggestVisionScenes, type SoundVibe,
 } from '@/components/onboarding/v3/generation';
 import type { GeneratedSong } from '@/components/onboarding/v3/generation';
 import { VoiceDump } from './VoiceDump';
@@ -714,12 +714,15 @@ export function V3_Chat({
     } else if (phase === 'why') {
       data.current.why = value;
       // Pre-warm the personalized VISION options from everything they said —
-      // ready by the time the photo is uploaded.
+      // ready by the time the photo is uploaded. V2 uses the dedicated
+      // suggest-vision-scenes AI (3 specific scenes from their exact words);
+      // v1 keeps the older suggest-comeback-ideas path.
       if (!visionReqRef.current) {
         visionReqRef.current = true;
-        suggestVisionIdeas(data.current.detail, data.current.scene, value)
-          .then(setVisionIdeas)
-          .catch(() => { /* static set covers it */ });
+        const visionReq = variant === 'v2'
+          ? suggestVisionScenes({ dream: data.current.detail, scene: data.current.scene, why: value })
+          : suggestVisionIdeas(data.current.detail, data.current.scene, value);
+        visionReq.then(setVisionIdeas).catch(() => { /* personalized fallback covers it */ });
       }
       setPhase('photo');
       if (variant === 'v2') {
@@ -769,9 +772,20 @@ export function V3_Chat({
   // V2 presents AI-proposed visions as 2-3 striking options to pick from (the
   // ideas are still AI-generated; only the picked one ever gets rendered, so it
   // stays 1 image of cost). V1 keeps its original 4-look behavior.
-  const visionSceneIdeas = () => variant === 'v2'
-    ? (visionIdeas ?? VISION_SCENE_DEFAULT_V2).slice(0, 3)
-    : (visionIdeas ?? (VISION_SCENE_IDEAS[data.current.songAbout] || VISION_SCENE_DEFAULT));
+  const visionSceneIdeas = () => {
+    if (variant !== 'v2') return visionIdeas ?? (VISION_SCENE_IDEAS[data.current.songAbout] || VISION_SCENE_DEFAULT);
+    if (visionIdeas) return visionIdeas.slice(0, 3);
+    // Personalized fallback (only if the AI scenes call fails): weave their OWN
+    // words into the prompts so the image is still specific to THEIR dream —
+    // never the generic static cards.
+    const words = (data.current.scene || data.current.detail || '').trim();
+    if (!words) return VISION_SCENE_DEFAULT_V2;
+    return [
+      { e: '🌅', t: 'Living it, right now', prompt: `as myself fully living this exact moment: ${words}. Present in the scene, photoreal and cinematic.` },
+      { e: '🏆', t: 'The moment I made it', prompt: `as the version of myself who made this real — ${words} — at the proudest peak, quietly powerful. Photoreal, cinematic.` },
+      { e: '🎬', t: 'A still from this life', prompt: `a candid, film-still moment of me living this: ${words}. Natural light, emotional, immersive.` },
+    ];
+  };
   const chooseVisionScene = (idea: { t: string; prompt: string }) => {
     data.current.visionScene = idea.prompt;
     pushUser(idea.t);

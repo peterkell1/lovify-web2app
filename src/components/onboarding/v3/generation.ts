@@ -84,6 +84,27 @@ export async function transcribeAudio(audio: Blob): Promise<string> {
   return text;
 }
 
+// ─── 0b. Vision scenes (V2) ─────────────────────────────────────
+// Turns the visitor's OWN answers into 3 specific, cinematic vision scenes of
+// them living that dream (via the suggest-vision-scenes edge fn). Each scene's
+// `prompt` becomes the brief for their vision image when they pick it. Replaces
+// the unreliable/generic suggest-comeback-ideas path for V2.
+export async function suggestVisionScenes(a: { dream: string; scene: string; why: string }): Promise<{ e: string; t: string; prompt: string }[]> {
+  const res = await authedFetch('suggest-vision-scenes', { dream: a.dream, scene: a.scene, why: a.why });
+  if (!res.ok) throw new Error(`suggest-vision-scenes failed (${res.status})`);
+  const data = await res.json();
+  const v = (Array.isArray(data?.visions) ? data.visions : [])
+    .map((x: { emoji?: string; title?: string; prompt?: string }) => ({
+      e: String(x.emoji || '✨').slice(0, 4),
+      t: String(x.title || '').trim().slice(0, 60),
+      prompt: String(x.prompt || '').trim().slice(0, 600),
+    }))
+    .filter((x: { t: string; prompt: string }) => x.t && x.prompt)
+    .slice(0, 3);
+  if (!v.length) throw new Error('empty visions');
+  return v;
+}
+
 // ─── 1. Sound styles ────────────────────────────────────────────
 // suggest-song-styles ← { conversationContext, previouslySuggestedVibes?, regenerateCount? }
 //                     → { vibes: [{ name, description, genre, emoji }], source }
