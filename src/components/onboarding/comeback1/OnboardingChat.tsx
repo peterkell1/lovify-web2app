@@ -303,12 +303,27 @@ function buildDreamLyricsPrompt(a: { name: string; dream: string; scenes: string
   ].filter((l, i) => l !== '' || i > 0).join('\n');
 }
 
-// V2 lyric engine (song-chat test) — the award-winning-songwriter prompt,
-// used faithfully. The craft + structure + rules are exactly as written; the
-// ONLY thing we inject is {description}, built from the visitor's own words
-// (their dream, the scenes of that life, why it matters, their name) so the
-// song is unmistakably theirs. Sent verbatim as the creative-assistant user
-// message via promptOverride, so we can A/B it without an edge-function deploy.
+// The 9 principles that make the song addictive AND unmistakably theirs. These
+// are the foundation of the lyric prompt — both the artist-style path and the
+// default craft path sit on top of them.
+const CORE_LYRIC_PRINCIPLES = [
+  'WHAT MAKES MY SONG ADDICTIVE (follow every one of these):',
+  '1. THE EARWORM: repetition is the mechanism. The chorus repeats 3-4 times, and each repeat lands in a slightly different emotional context so it deepens instead of feeling redundant. The hook is singable after one listen — under 10 words, rhythmic, first person.',
+  '2. EVOKE THE SENSES: engage sight, sound, touch, smell and taste. The more senses involved, the deeper it lands.',
+  '3. MAKE IT VISUAL: create a movie from the images I gave you — put me in a specific place, moment and sensation I can see myself inside of.',
+  '4. MAKE ME FEEL: positive, happy, alive, grateful, hopeful.',
+  '5. INSTALL THE BELIEF: the chorus IS the belief I want to carry; everything else exists to make that belief feel earned and real.',
+  '6. BEST-CASE SCENARIO: always imagine the best version of my vision and help me see and feel it.',
+  '7. CONCRETE OVER ABSTRACT: every line contains at least one concrete noun or sensory detail from my own words. Express feelings through physical actions or objects — never state them directly.',
+  "8. FOR ME ONLY: if you swapped out the details and the song still worked for anyone else, you've failed. A stranger should be able to guess what this song is about from the lyrics alone.",
+  '9. PRESENT TENSE, FIRST PERSON: I am there, experiencing it now.',
+].join('\n');
+
+// V2 lyric engine (song-chat test). Stacked on the 9 CORE_LYRIC_PRINCIPLES, then
+// either the named artist's reverse-engineered structure OR the default
+// award-winning-pop scaffold. {description} is built from the visitor's own
+// words so the song is unmistakably theirs. Sent as the creative-assistant user
+// message via promptOverride.
 function buildSongwriterLyricsPromptV2(a: { name: string; dream: string; scenes: string; why: string; artistBrief?: ArtistBrief }): string {
   const description = [
     (a.dream || '').trim(),
@@ -317,32 +332,28 @@ function buildSongwriterLyricsPromptV2(a: { name: string; dream: string; scenes:
     (a.name || '').trim() && `(written for ${(a.name || '').trim()})`,
   ].filter(Boolean).join(', ');
 
+  const head = `You are an award-winning songwriter. Write original, emotionally specific lyrics for a song about: ${description || 'the dream life I most want to live'}.`;
+
   const brief = a.artistBrief;
   // If the visitor named a song/artist they love, we reverse-engineered it into
-  // a name-free lyric FORMULA — use that as the structural guide instead of the
-  // default award-winning-pop scaffold, so the lyrics adopt that exact style.
+  // a name-free lyric FORMULA — use that as the structural guide on top of the
+  // core principles, so the lyrics adopt that exact style.
   if (brief && brief.lyricalFormula) {
     return [
-      `You are an award-winning songwriter. Write original, emotionally specific lyrics for a song about: ${description || 'the dream life I most want to live'}.`,
-      `Write in EXACTLY this lyric style (a real songwriting technique, described name-free) — follow it precisely on this topic:`,
+      head,
+      CORE_LYRIC_PRINCIPLES,
+      `STRUCTURE & STYLE — write in EXACTLY this lyric style (a real songwriting technique, described name-free), follow it precisely on this topic:`,
       brief.lyricalFormula,
       brief.structuralDynamics ? `How the lyrics and the music push and pull: ${brief.structuralDynamics}` : '',
       brief.styleSpecificTraps?.length ? `Avoid these specific mistakes: ${brief.styleSpecificTraps.join('; ')}.` : '',
-      `Make every concrete image come from MY words above. Present tense, first person, as if I am already living this life.`,
       'Output only the section tags and the lyrics — no production notes or commentary.',
     ].filter(Boolean).join('\n');
   }
 
   return [
-    `You are an award-winning pop songwriter. Write original, emotionally specific lyrics for a song about: ${description || 'the dream life I most want to live'}.`,
-    'Write with the melodic, hook-driven craft of modern pop in the spirit of Charlie Puth, Ed Sheeran and Dua Lipa — conversational, vivid, with a memorable, repeatable chorus hook. Avoid clichés and filler.',
-    'Use these sections in this exact order, each on its own line as a tag: [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro].',
-    'Follow these rules exactly:',
-    '- Each Verse is exactly 4 lines, rhyme scheme A B A B.',
-    '- Each Pre-Chorus is exactly 2 lines, rhyme scheme A A, building tension into the chorus.',
-    '- Each Chorus is exactly 4 lines, rhyme scheme A A B B, with the same words every time.',
-    '- The Bridge is 2 to 4 lines.',
-    // Functional guard only (the song is sung verbatim): keep notes out of the output.
+    head,
+    CORE_LYRIC_PRINCIPLES,
+    'CRAFT & STRUCTURE — modern hook-driven pop in the spirit of Charlie Puth, Ed Sheeran and Dua Lipa. Use these sections in this exact order, each on its own line as a tag: [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro]. Each Verse 4 lines (rhyme A B A B); each Pre-Chorus 2 lines (A A) building tension; each Chorus 4 lines (A A B B), the same words every time; the Bridge 2-4 lines.',
     'Output only the section tags and the lyrics — no production notes or commentary.',
   ].join('\n');
 }
@@ -785,12 +796,12 @@ export function V3_Chat({
     data.current.face = faces[0] ?? null;
     if (faces.length) pushUserPhotos(faces);
     if (variant === 'v2') {
-      // V2: photo done → the sound question (the artist reference).
-      setPhase('artist');
+      // V2: photo done → pick the vision scene (right after the upload).
+      setPhase('visionScene');
       botSay([
         faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's going to look incredible. ✨`,
-        `Now — what do you want your song to sound like? Name a song title or artist name that would fit perfectly with this and we'll remake your song in that style. 🎧`,
-      ], 'text');
+        `Now — what scene should we picture you in to bring this dream to life? 👇 Tap one of my ideas, or describe your own.`,
+      ], 'visionScene');
       return;
     }
     setPhase('visionScene');
@@ -804,11 +815,11 @@ export function V3_Chat({
     data.current.faces = [];
     data.current.face = null;
     if (variant === 'v2') {
-      setPhase('artist');
+      setPhase('visionScene');
       botSay([
         `No worries — we can add it anytime.`,
-        `Now — what do you want your song to sound like? Name a song title or artist name that would fit perfectly with this and we'll remake your song in that style. 🎧`,
-      ], 'text');
+        `What scene should we picture to bring this dream to life, ${name}? 👇 Tap one of my ideas, or describe your own.`,
+      ], 'visionScene');
       return;
     }
     setPhase('visionScene');
@@ -862,12 +873,12 @@ export function V3_Chat({
     });
     afterVision();
   };
-  // After the vision look: V2 has no genre step (the sound came from the artist
-  // reference), so go straight to the voice pick. V1 still asks for the sound.
+  // After the vision look: V2 asks the sound question (the artist reference) —
+  // there's no genre/vibe step. V1 still asks which sound feels right.
   const afterVision = () => {
     if (variant === 'v2') {
-      setPhase('voice');
-      botSay([`Beautiful — that's going to look incredible. 🎨`, `Last thing: who should sing it?`], 'voice');
+      setPhase('artist');
+      botSay([`Beautiful — that's going to look incredible. 🎨`, `Now — what do you want your song to sound like? Name a song title or artist name that would fit perfectly with this and we'll remake your song in that style. 🎧`], 'text');
     } else {
       setPhase('sound');
       botSay([`Beautiful choice. 🎨`, `Now let's make it sound like you. Which of these feels right, ${name}?`], 'soundLoading');
@@ -910,7 +921,10 @@ export function V3_Chat({
         // Strip any trailing production-note block — Mureka would sing it.
         d.lyrics = (res.content || '').replace(/\n\[(?:production|note|style note)[^\]]*\][\s\S]*$/i, '').trim();
         d.title = res.title;
-        if (res.style) d.soundStyle = res.style;
+        // Don't let the lyric engine's generic style clobber the artist sound:
+        // when the named reference was analyzed into a styleDescription, THAT is
+        // the sound for the song. Only fall back to res.style when there's none.
+        if (res.style && !d.artistBrief?.styleDescription) d.soundStyle = res.style;
       })
       .catch(() => { d.lyrics = fallbackLyrics(d.detail, d.why); d.title = 'Your Song'; })
       .finally(() => {
@@ -1067,12 +1081,10 @@ export function V3_Chat({
     const d = data.current;
     d.lyrics = lyricsDraft.trim() || d.lyrics;
     if (variant === 'v2') {
-      // V2: photo + sound are already done — now pick the vision scene, then voice.
+      // V2: photo, vision and sound are all done — last step is the voice, then song.
       pushUser('Love it — let’s keep going 🎶');
-      setPhase('visionScene');
-      botSay([
-        `Perfect. Now — what scene should we picture you in to bring this dream to life? 👇 Tap one of my ideas, or describe your own.`,
-      ], 'visionScene');
+      setPhase('voice');
+      botSay([`Love it. 🎶`, `Last thing: who should sing it?`], 'voice');
       return;
     }
     pushUser('Make my song 🎶');
