@@ -4032,13 +4032,14 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
 }) {
   // Loading state so the button gives instant feedback — opening the embedded RC
   // checkout (SDK load + offerings fetch) takes a beat, and without this the tap
-  // felt dead until the sheet appeared.
-  const [busy, setBusy] = useState(false);
-  const go = async () => {
-    if (busy) return;
-    setBusy(true);
-    try { await onOrder?.('annual99'); }
-    finally { setBusy(false); } // on success the page navigates away; on cancel/error we reset
+  // felt dead until the sheet appeared. Track WHICH plan is opening so only the
+  // tapped button spins; the other just disables.
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const go = async (planId: string) => {
+    if (busyPlan) return;
+    setBusyPlan(planId);
+    try { await onOrder?.(planId); }
+    finally { setBusyPlan(null); } // success navigates away; cancel/error resets
   };
   return (
     <LovScreen>
@@ -4074,8 +4075,8 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
         ))}
       </div>
       <div style={{ padding: '12px 24px 28px', flexShrink: 0 }}>
-        <LovPrimary onClick={go} disabled={busy} style={busy ? { background: LOVIFY.orangeGradient, color: '#FFFCF4', cursor: 'default', boxShadow: '0 14px 28px -10px rgba(216, 92, 28, 0.45)' } : undefined}>
-          {busy
+        <LovPrimary onClick={() => go('annual99')} disabled={!!busyPlan} style={busyPlan === 'annual99' ? { background: LOVIFY.orangeGradient, color: '#FFFCF4', cursor: 'default', boxShadow: '0 14px 28px -10px rgba(216, 92, 28, 0.45)' } : undefined}>
+          {busyPlan === 'annual99'
             ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9 }}><BtnSpinner />Opening secure checkout…</span>
             : 'Continue'}
         </LovPrimary>
@@ -4083,6 +4084,15 @@ export function V3_OrderAnnual99({ onBack, onOrder, savedSong }: NavProps & {
           <strong style={{ color: LOVIFY.ink }}>$99/year</strong> · billed today · cancel anytime
         </div>
         <div style={{ textAlign: 'center', marginTop: 6, fontFamily: SANS, fontSize: 12, fontWeight: 700, color: LOVIFY.inkSoft }}>🛡️ 30-Day Money-Back Guarantee</div>
+        {/* Secondary: monthly, for people who don't want to pay a year up front.
+            Kept understated so the annual stays the hero. */}
+        <button
+          onClick={() => go('monthly')}
+          disabled={!!busyPlan}
+          style={{ display: 'block', margin: '16px auto 0', padding: '4px 8px', background: 'none', border: 'none', cursor: busyPlan ? 'default' : 'pointer', fontFamily: SANS, fontSize: 13.5, fontWeight: 700, color: LOVIFY.orangeDeep, textDecoration: 'underline', textUnderlineOffset: 3 }}
+        >
+          {busyPlan === 'monthly' ? 'Opening secure checkout…' : 'Or pay monthly — $17.99/mo'}
+        </button>
       </div>
     </LovScreen>
   );
