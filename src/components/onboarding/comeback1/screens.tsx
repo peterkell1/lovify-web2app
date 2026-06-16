@@ -1841,8 +1841,9 @@ function RisingLineChart({ title, web }: { title: string; web?: boolean }) {
         <path d={area} fill="url(#risefill)" />
         <path d={line} fill="none" stroke="url(#riseline)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         <circle cx={last[0]} cy={last[1]} r="4" fill="#E8743A" stroke="#fff" strokeWidth="1.5" />
-        <text x={padX} y={H - 6} fontFamily={SANS} fontSize={web ? 12 : 10} fill={LOVIFY.subSoft}>past</text>
-        <text x={W - padX} y={H - 6} textAnchor="end" fontFamily={SANS} fontSize={web ? 12 : 10} fill={LOVIFY.subSoft}>today</text>
+        {/* Match the previous proof page's axis (NegativityChart: 1973 → 2023). */}
+        <text x={padX} y={H - 6} fontFamily={SANS} fontSize={web ? 12 : 10} fill={LOVIFY.subSoft}>1973</text>
+        <text x={W - padX} y={H - 6} textAnchor="end" fontFamily={SANS} fontSize={web ? 12 : 10} fill={LOVIFY.subSoft}>2023</text>
       </svg>
     </ChartCard>
   );
