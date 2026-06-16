@@ -105,6 +105,33 @@ export async function suggestVisionScenes(a: { dream: string; scene: string; why
   return v;
 }
 
+// ─── 0c. Artist/song reference → style + lyric blueprint (V2) ────
+// The optional "a song you'd love this to sound like?" question. Reverse-
+// engineers the reference into a name/voice-free production brief + lyric
+// rulebook (via the describe-artist-sound edge fn). styleDescription drives the
+// music engine; lyricalFormula + structuralDynamics + styleSpecificTraps shape
+// the songwriter. Returns null when the reference can't be identified.
+export interface ArtistBrief {
+  styleDescription: string;
+  lyricalFormula: string;
+  structuralDynamics: string;
+  styleSpecificTraps: string[];
+}
+export async function describeArtistSound(ref: string): Promise<ArtistBrief | null> {
+  const res = await authedFetch('describe-artist-sound', { artistOrSong: ref });
+  if (!res.ok) throw new Error(`describe-artist-sound failed (${res.status})`);
+  const data = await res.json();
+  if (!data || data.notFound) return null;
+  const brief: ArtistBrief = {
+    styleDescription: String(data.styleDescription || '').slice(0, 1000),
+    lyricalFormula: String(data.lyricalFormula || '').slice(0, 1400),
+    structuralDynamics: String(data.structuralDynamics || '').slice(0, 500),
+    styleSpecificTraps: Array.isArray(data.styleSpecificTraps) ? data.styleSpecificTraps.map(String).slice(0, 3) : [],
+  };
+  if (!brief.styleDescription && !brief.lyricalFormula) return null;
+  return brief;
+}
+
 // ─── 1. Sound styles ────────────────────────────────────────────
 // suggest-song-styles ← { conversationContext, previouslySuggestedVibes?, regenerateCount? }
 //                     → { vibes: [{ name, description, genre, emoji }], source }

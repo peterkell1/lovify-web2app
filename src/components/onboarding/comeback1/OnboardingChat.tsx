@@ -20,7 +20,8 @@ import { LOVIFY, SANS, SERIF } from '@/components/onboarding/v3/theme';
 import { LovLogo } from '@/components/onboarding/v3/primitives';
 import { capturePostHogEvent } from '@/lib/posthog';
 import {
-  suggestSoundStyles, buildStyleContext, generateLyrics, suggestVisionScenes, type SoundVibe,
+  suggestSoundStyles, buildStyleContext, generateLyrics, suggestVisionScenes, describeArtistSound,
+  type SoundVibe, type ArtistBrief,
 } from '@/components/onboarding/v3/generation';
 import type { GeneratedSong } from '@/components/onboarding/v3/generation';
 import { VoiceDump } from './VoiceDump';
@@ -30,7 +31,7 @@ import { publicEnv } from '@/lib/env';
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
 
 type Phase =
-  | 'name' | 'detail' | 'scene' | 'why'
+  | 'name' | 'detail' | 'scene' | 'why' | 'artist'
   | 'photo' | 'visionScene' | 'sound' | 'voice'
   | 'writing' | 'lyricsReview' | 'email' | 'generating';
 
@@ -38,7 +39,7 @@ type Phase =
 // event below, so PostHog can build a question-by-question funnel inside the
 // song chat (previously the whole chat was one opaque 'song_chat' step).
 const PHASE_ORDER: Phase[] = [
-  'name', 'detail', 'scene', 'why', 'photo', 'visionScene',
+  'name', 'detail', 'scene', 'why', 'artist', 'photo', 'visionScene',
   'sound', 'voice', 'writing', 'lyricsReview', 'email', 'generating',
 ];
 
@@ -67,6 +68,8 @@ export interface ChatResult {
   why: string;
   soundStyle: string;
   voice: string;
+  artistRef?: string;         // V2: "a song you'd love this to sound like?" (optional)
+  artistBrief?: ArtistBrief;  // reverse-engineered, name-free sound + lyric blueprint
   face: string | null;        // primary face (drives the vision generator)
   faces: string[];            // all uploaded people (you + gf/family)
   visionScene: string;        // the chosen look for the image
@@ -297,13 +300,29 @@ function buildDreamLyricsPrompt(a: { name: string; dream: string; scenes: string
 // (their dream, the scenes of that life, why it matters, their name) so the
 // song is unmistakably theirs. Sent verbatim as the creative-assistant user
 // message via promptOverride, so we can A/B it without an edge-function deploy.
-function buildSongwriterLyricsPromptV2(a: { name: string; dream: string; scenes: string; why: string }): string {
+function buildSongwriterLyricsPromptV2(a: { name: string; dream: string; scenes: string; why: string; artistBrief?: ArtistBrief }): string {
   const description = [
     (a.dream || '').trim(),
     (a.scenes || '').trim() && `pictured like this: ${(a.scenes || '').trim()}`,
     (a.why || '').trim() && `and it matters because ${(a.why || '').trim()}`,
     (a.name || '').trim() && `(written for ${(a.name || '').trim()})`,
   ].filter(Boolean).join(', ');
+
+  const brief = a.artistBrief;
+  // If the visitor named a song/artist they love, we reverse-engineered it into
+  // a name-free lyric FORMULA — use that as the structural guide instead of the
+  // default award-winning-pop scaffold, so the lyrics adopt that exact style.
+  if (brief && brief.lyricalFormula) {
+    return [
+      `You are an award-winning songwriter. Write original, emotionally specific lyrics for a song about: ${description || 'the dream life I most want to live'}.`,
+      `Write in EXACTLY this lyric style (a real songwriting technique, described name-free) — follow it precisely on this topic:`,
+      brief.lyricalFormula,
+      brief.structuralDynamics ? `How the lyrics and the music push and pull: ${brief.structuralDynamics}` : '',
+      brief.styleSpecificTraps?.length ? `Avoid these specific mistakes: ${brief.styleSpecificTraps.join('; ')}.` : '',
+      `Make every concrete image come from MY words above. Present tense, first person, as if I am already living this life.`,
+      'Output only the section tags and the lyrics — no production notes or commentary.',
+    ].filter(Boolean).join('\n');
+  }
 
   return [
     `You are an award-winning pop songwriter. Write original, emotionally specific lyrics for a song about: ${description || 'the dream life I most want to live'}.`,
@@ -724,15 +743,21 @@ export function V3_Chat({
           : suggestVisionIdeas(data.current.detail, data.current.scene, value);
         visionReq.then(setVisionIdeas).catch(() => { /* personalized fallback covers it */ });
       }
-      setPhase('photo');
       if (variant === 'v2') {
-        botSay([`Add your photo so we can create a vision of you living this dream 📸`], 'photo');
+        // V2: one more OPTIONAL question — a song they love — before lyrics, so it
+        // can shape both the lyric style and the sound. Then straight into lyrics.
+        setPhase('artist');
+        botSay([`Last one — is there a song or artist you'd love this to sound like? The one that gives you chills. 🎧`], 'text');
       } else {
+        setPhase('photo');
         botSay([
           `That's the real you talking — and that's the heart of your song.`,
           `Now add a photo of yourself, ${name} — and anyone else you want in the picture (partner, family, friends).`,
         ], 'photo');
       }
+    } else if (phase === 'artist') {
+      // Q4 (V2): they typed a song/artist they love (submitText already pushed it).
+      chooseArtist(value);
     }
   };
 
@@ -751,7 +776,7 @@ export function V3_Chat({
     botSay([
       faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's going to look incredible. ✨`,
       variant === 'v2'
-        ? `Now — here's how I picture you living this, ${name}. 👇 Tap the one that hits you most (or describe your own).`
+        ? `Now — what scene should we picture you in to showcase this dream? 👇 Tap one of my ideas, or describe your own.`
         : `Now let's picture YOU in it, ${name}. Which version of you should we bring to life? (or tap "Describe my own" to say it your way)`,
     ], 'visionScene');
   };
@@ -763,7 +788,7 @@ export function V3_Chat({
     botSay([
       `No worries — we can add it anytime.`,
       variant === 'v2'
-        ? `Here's how I picture you living this, ${name}. 👇 Tap the one that hits you most (or describe your own).`
+        ? `What scene should we picture to showcase this dream, ${name}? 👇 Tap one of my ideas, or describe your own.`
         : `Which version of you should we picture, ${name}? (or describe your own)`,
     ], 'visionScene');
   };
@@ -797,8 +822,7 @@ export function V3_Chat({
       songAbout: data.current.songAbout, scene: data.current.scene,
       detail: data.current.detail, visionScene: idea.prompt,
     });
-    setPhase('sound');
-    botSay([`Beautiful choice. 🎨`, `Now let's make it sound like you. Which of these feels right, ${name}?`], 'soundLoading');
+    afterVision();
   };
   // Free-typed vision — the user describes exactly how they want to look.
   const chooseVisionText = (override?: string) => {
@@ -811,8 +835,18 @@ export function V3_Chat({
       songAbout: data.current.songAbout, scene: data.current.scene,
       detail: data.current.detail, visionScene: value,
     });
-    setPhase('sound');
-    botSay([`Love it — I can see it. 🎨`, `Now let's make it sound like you. Which of these feels right, ${name}?`], 'soundLoading');
+    afterVision();
+  };
+  // After the vision look: V2 skips the genre step when an artist reference
+  // already set the sound; otherwise we ask which sound feels right.
+  const afterVision = () => {
+    if (variant === 'v2' && data.current.artistBrief?.styleDescription) {
+      setPhase('voice');
+      botSay([`Beautiful — that's going to look incredible. 🎨`, `Last thing: who should sing it?`], 'voice');
+    } else {
+      setPhase('sound');
+      botSay([`Beautiful choice. 🎨`, `Now let's make it sound like you. Which of these feels right, ${name}?`], 'soundLoading');
+    }
   };
 
   // ── Sound vibe chosen (chip) or free-typed style ──
@@ -843,9 +877,9 @@ export function V3_Chat({
       // V2 swaps in the award-winning-songwriter lyric engine (craft + structure
       // + identity arc). v1 keeps the current Taylor-Swift-reorg prompt. Both go
       // in as the user message, so it's a clean head-to-head with no edge deploy.
-      promptOverride: (variant === 'v2' ? buildSongwriterLyricsPromptV2 : buildDreamLyricsPrompt)({
-        name: d.name, dream: d.detail, scenes: d.scene, why: d.why,
-      }),
+      promptOverride: variant === 'v2'
+        ? buildSongwriterLyricsPromptV2({ name: d.name, dream: d.detail, scenes: d.scene, why: d.why, artistBrief: d.artistBrief })
+        : buildDreamLyricsPrompt({ name: d.name, dream: d.detail, scenes: d.scene, why: d.why }),
     })
       .then((res) => {
         // Strip any trailing production-note block — Mureka would sing it.
@@ -858,10 +892,15 @@ export function V3_Chat({
         setLyricsDraft(d.lyrics);
         setPhase('lyricsReview');
         if (announce) {
-          botSay([
-            `Here's your song, ${name} — this is what we'll plant in your mind. 🧠`,
-            `Read it over. Tweak anything that isn't quite you, then make it real.`,
-          ], 'lyricsReview');
+          botSay(variant === 'v2'
+            ? [
+              `Here are your lyrics, ${name} — this is what we'll rewire into your mind. 🧠`,
+              `Read them over and tweak anything that isn't quite you — then we'll create your vision next.`,
+            ]
+            : [
+              `Here's your song, ${name} — this is what we'll plant in your mind. 🧠`,
+              `Read it over. Tweak anything that isn't quite you, then make it real.`,
+            ], 'lyricsReview');
         } else {
           // Recovered after a refresh — don't replay the bot lines, just show
           // the textarea so the user can keep going.
@@ -870,11 +909,50 @@ export function V3_Chat({
       });
   };
 
+  // ── Q4 (V2): a song/artist they love → reverse-engineer it into a name-free
+  //    sound + lyric blueprint, THEN write the lyrics in that style. The brief
+  //    also becomes the song's sound, so we skip the genre step later. ──
+  const chooseArtist = (value: string) => {
+    data.current.artistRef = value;
+    setPhase('writing');
+    botSay([`Ooh — love that. Let me capture that exact vibe and write your lyrics… 🧠`], 'writing');
+    describeArtistSound(value)
+      .then((brief) => {
+        if (brief) {
+          data.current.artistBrief = brief;
+          if (brief.styleDescription) data.current.soundStyle = brief.styleDescription;
+        }
+      })
+      .catch(() => { /* couldn't ID it — the default songwriter prompt covers it */ })
+      .finally(() => writeLyrics(true));
+  };
+  const skipArtist = () => {
+    pushUser('Surprise me ✨');
+    setPhase('writing');
+    botSay([`Perfect — I'll find the sound that fits. Writing your lyrics now… 🧠`], 'writing');
+    writeLyrics(true);
+  };
+
   // ── Voice chosen → write lyrics (with a live loader), then SHOW them for
   //    review/edit before we make the song. ──
   const chooseVoice = (v: string) => {
     data.current.voice = v;
     pushUser(v);
+    if (variant === 'v2') {
+      // V2: lyrics were already written after the questions — voice is the final
+      // step, so make the song now (collecting the email first on /offer).
+      if (collectEmail && !data.current.email) {
+        setPhase('email');
+        setMode('email');
+        botSay([
+          `Amazing. One last thing before I make it, ${name || 'friend'} —`,
+          `what's your email? I'll create your song now and send you a copy to keep. 🎶`,
+        ], 'email');
+        return;
+      }
+      startGeneration();
+      return;
+    }
     setPhase('writing');
     setMode('writing'); // persistent animated loader (doesn't just sit there)
     writeLyrics(true);
@@ -935,6 +1013,7 @@ export function V3_Chat({
   // Placeholder copy tuned to the step so typing feels intentional, not a fallback.
   const textBarPlaceholder =
     phase === 'name' ? 'Type your name…'
+    : phase === 'artist' ? 'Type a song or artist you love…'
     : mode === 'email' ? 'you@email.com'
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
@@ -963,6 +1042,17 @@ export function V3_Chat({
   const confirmLyrics = () => {
     const d = data.current;
     d.lyrics = lyricsDraft.trim() || d.lyrics;
+    if (variant === 'v2') {
+      // V2: lyrics come BEFORE the visual + sound. Move on to the photo/vision,
+      // then genre + voice, then make the song.
+      pushUser('Love it — let’s keep going 🎶');
+      setPhase('photo');
+      botSay([
+        `Perfect. Now let's create a vision of you to go with this song. ✨`,
+        `Upload a photo of yourself and we'll picture you living this dream 📸`,
+      ], 'photo');
+      return;
+    }
     pushUser('Make my song 🎶');
     if (collectEmail && !d.email) {
       setPhase('email');
@@ -1179,6 +1269,13 @@ export function V3_Chat({
           <div style={{ alignSelf: 'flex-start' }}>
             <LoaderLine lines={SOUND_LOADING_LINES} />
           </div>
+        )}
+
+        {/* Q4 (V2): the artist/song reference is optional — offer an easy skip. */}
+        {variant === 'v2' && mode === 'text' && phase === 'artist' && (
+          <ChoiceList>
+            <Choice onClick={skipArtist}>🎲 Surprise me — you pick the sound</Choice>
+          </ChoiceList>
         )}
 
         {mode === 'sound' && (
@@ -1398,7 +1495,7 @@ export function V3_Chat({
                 boxShadow: '0 12px 26px -12px rgba(216,92,28,0.6)',
               }}
             >
-              Make my song 🎶
+              {variant === 'v2' ? 'Looks great — continue →' : 'Make my song 🎶'}
             </button>
           </div>
         )}
