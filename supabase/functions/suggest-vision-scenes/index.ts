@@ -5,12 +5,12 @@
 // scenes that show THEM living that exact dream. The chat shows these as the
 // pickable options; the chosen one becomes the prompt for their vision image.
 //
-// This replaces the unreliable/generic suggest-comeback-ideas path — the whole
-// point is that the scenes are grounded in what the person actually wrote.
-//
-// DEPLOY (the team owns this — reuses the SAME key as transcribe-audio):
+// Runs on Claude Sonnet via Kie.ai (same provider as the Suno song generation).
+// DEPLOY:
 //   supabase functions deploy suggest-vision-scenes --no-verify-jwt
-//   supabase secrets set OPENAI_API_KEY=sk-...   (already set for transcription)
+//   supabase secrets set KIE_AI_API_KEY=...   (already set for the other fns)
+
+const KIE_MODEL = 'claude-sonnet-4-5';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +19,36 @@ const cors = {
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+
+async function callClaude(system: string, user: string, maxTokens: number): Promise<string> {
+  const key = Deno.env.get('KIE_AI_API_KEY');
+  if (!key) throw new Error('KIE_AI_API_KEY not set');
+  const res = await fetch('https://api.kie.ai/claude/v1/messages', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: KIE_MODEL,
+      max_tokens: maxTokens,
+      stream: false,
+      messages: [{ role: 'user', content: `${system}\n\n---\n\n${user}` }],
+    }),
+  });
+  if (!res.ok) throw new Error(`kie claude ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const blocks = Array.isArray(data?.content) ? data.content : [];
+  return blocks.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
+}
+
+function extractJson(text: string): Record<string, unknown> {
+  let t = text.trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) t = fence[1].trim();
+  if (!t.startsWith('{')) {
+    const s = t.indexOf('{'); const e = t.lastIndexOf('}');
+    if (s >= 0 && e > s) t = t.slice(s, e + 1);
+  }
+  return JSON.parse(t);
+}
 
 const SYSTEM = `You help someone SEE themselves living their dream life so vividly they feel it's already real.
 Given their own words, invent EXACTLY 3 distinct, specific, cinematic vision scenes that each show THEM inside this exact dream.
@@ -29,37 +59,19 @@ Rules:
 - The image prompt must describe a real, lifelike, cinematic photo. No "golden hour" cliche, no text, no watermark.
 Return ONLY strict JSON: {"visions":[{"emoji":"","title":"","prompt":""},{"emoji":"","title":"","prompt":""},{"emoji":"","title":"","prompt":""}]}`;
 
-async function suggest(dream: string, scene: string, why: string): Promise<unknown[]> {
-  const key = Deno.env.get('OPENAI_API_KEY');
-  if (!key) throw new Error('OPENAI_API_KEY not set');
-  const user = [
-    dream && `My dream / the life I most want: ${dream}`,
-    scene && `The best version of me — where I live, who's with me: ${scene}`,
-    why && `Why it matters to me: ${why}`,
-  ].filter(Boolean).join('\n') || 'My dream life.';
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0.9,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: user }],
-    }),
-  });
-  if (!res.ok) throw new Error(`openai ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  const content = data?.choices?.[0]?.message?.content || '{}';
-  const parsed = JSON.parse(content);
-  return Array.isArray(parsed?.visions) ? parsed.visions : [];
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   try {
     const { dream = '', scene = '', why = '' } = await req.json();
-    const visions = await suggest(String(dream), String(scene), String(why));
+    const user = [
+      dream && `My dream / the life I most want: ${dream}`,
+      scene && `The best version of me — where I live, who's with me: ${scene}`,
+      why && `Why it matters to me: ${why}`,
+    ].filter(Boolean).join('\n') || 'My dream life.';
+    const text = await callClaude(SYSTEM, user, 1500);
+    const parsed = extractJson(text);
+    const visions = Array.isArray(parsed?.visions) ? parsed.visions : [];
     return json({ visions });
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);

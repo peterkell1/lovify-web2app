@@ -8,11 +8,12 @@
 // Returns JSON: { styleDescription, lyricalFormula, structuralDynamics,
 //                 styleSpecificTraps[] }  OR  { notFound, suggestion }.
 //
-// DEPLOY (reuses the SAME OPENAI_API_KEY as the other functions):
+// Runs on Claude Sonnet via Kie.ai (same provider as the Suno song generation).
+// DEPLOY:
 //   supabase functions deploy describe-artist-sound --no-verify-jwt
-// Model: gpt-4o-mini by default — bump MODEL to 'gpt-4o' for higher fidelity.
+//   supabase secrets set KIE_AI_API_KEY=...
 
-const MODEL = 'gpt-4o-mini';
+const KIE_MODEL = 'claude-sonnet-4-5';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -21,6 +22,40 @@ const cors = {
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+
+// Call Claude Sonnet on Kie.ai (Anthropic Messages format). The documented
+// schema doesn't expose a separate `system` field, so we fold the system
+// instructions into the user message for guaranteed compatibility.
+async function callClaude(system: string, user: string, maxTokens: number): Promise<string> {
+  const key = Deno.env.get('KIE_AI_API_KEY');
+  if (!key) throw new Error('KIE_AI_API_KEY not set');
+  const res = await fetch('https://api.kie.ai/claude/v1/messages', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: KIE_MODEL,
+      max_tokens: maxTokens,
+      stream: false,
+      messages: [{ role: 'user', content: `${system}\n\n---\n\n${user}` }],
+    }),
+  });
+  if (!res.ok) throw new Error(`kie claude ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const blocks = Array.isArray(data?.content) ? data.content : [];
+  return blocks.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
+}
+
+// Claude returns prose-wrapped or fenced JSON sometimes — extract the object.
+function extractJson(text: string): Record<string, unknown> {
+  let t = text.trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) t = fence[1].trim();
+  if (!t.startsWith('{')) {
+    const s = t.indexOf('{'); const e = t.lastIndexOf('}');
+    if (s >= 0 && e > s) t = t.slice(s, e + 1);
+  }
+  return JSON.parse(t);
+}
 
 const SYSTEM = `You are a world-class music producer and lyric analyst. Your job is to reverse-engineer the SONIC STYLE and LYRIC-WRITING TECHNIQUE of a given artist or song.
 
@@ -61,32 +96,14 @@ Output ONLY the JSON object. No explanation, no markdown formatting.`;
 const userMsg = (ref: string) =>
   `Reverse-engineer "${ref}". For styleDescription: what are the exact sonic control signals a producer would need? For lyricalFormula: what are the specific line-construction RULES a ghostwriter would follow to write new lyrics that feel structurally identical — on any topic? For structuralDynamics: how do the lyrics and production push and pull against each other? For styleSpecificTraps: what are the 3 biggest mistakes a ghostwriter would make trying to imitate THIS artist's lyric style?`;
 
-async function describe(ref: string): Promise<unknown> {
-  const key = Deno.env.get('OPENAI_API_KEY');
-  if (!key) throw new Error('OPENAI_API_KEY not set');
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: userMsg(ref) }],
-    }),
-  });
-  if (!res.ok) throw new Error(`openai ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return JSON.parse(data?.choices?.[0]?.message?.content || '{}');
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   try {
     const { artistOrSong = '' } = await req.json();
     if (!String(artistOrSong).trim()) return json({ error: 'missing artistOrSong' }, 400);
-    const out = await describe(String(artistOrSong).trim());
-    return json(out);
+    const text = await callClaude(SYSTEM, userMsg(String(artistOrSong).trim()), 2000);
+    return json(extractJson(text));
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);
   }
