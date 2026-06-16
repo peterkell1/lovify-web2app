@@ -94,7 +94,7 @@ const WEB_STEP_IDS_B = [
 const WEB_STEP_IDS_ANNUAL99 = [
   'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
   'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
-  'proof_music_negative', 'proof_more_depressed', 'the_turn', 'song_ideas',
+  'proof_music_negative', 'proof_more_depressed', 'the_turn',
   'genres', 'make_first_song', 'song_chat', 'order_annual99', 'create_account',
 ] as const;
 
