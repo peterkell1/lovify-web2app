@@ -583,8 +583,9 @@ export function V3_DrugHook({ onNext, onBack, onSkip, opener, sound = true, onTo
   const benefits = opener ? OPENER_BENEFITS : DRUG_BENEFITS;
   const [i, setI] = useState(0);
   useEffect(() => {
-    // Let the slow headline land first, then start cycling benefits.
-    const startDelay = 1400;
+    // Let the slow headline land first, then start cycling benefits. The /offer
+    // opener renders the headline instantly (no reveal), so start right away.
+    const startDelay = opener ? 0 : 1400;
     let idx = 0;
     const timers: ReturnType<typeof setTimeout>[] = [];
     const tick = () => {
@@ -616,15 +617,25 @@ export function V3_DrugHook({ onNext, onBack, onSkip, opener, sound = true, onTo
         : <LovSkip onClick={onSkip} />}
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 30px', textAlign: 'center' }}>
         <h1 style={{ margin: 0, fontFamily: SANS, fontWeight: opener ? 800 : 600, fontSize: 25, lineHeight: 1.3, letterSpacing: -0.5, color: LOVIFY.ink }}>
-          <RevealWords text="Imagine a" per={0.16} />{' '}
-          <LovAccent>drug</LovAccent>{' '}
-          <RevealWords text="that could help you…" delay={0.5} per={0.13} />
+          {opener ? (
+            // /offer page 1: render instantly — no word-by-word reveal (also
+            // avoids the reveal stalling in in-app webviews).
+            <>Imagine a <LovAccent>drug</LovAccent> that could help you…</>
+          ) : (
+            <>
+              <RevealWords text="Imagine a" per={0.16} />{' '}
+              <LovAccent>drug</LovAccent>{' '}
+              <RevealWords text="that could help you…" delay={0.5} per={0.13} />
+            </>
+          )}
         </h1>
         <div style={{ height: 42, marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 14, filter: 'blur(8px)' }}
+              // /offer opener: show the first benefit instantly (no entrance);
+              // later rotations still cross-fade.
+              initial={opener && i === 0 ? false : { opacity: 0, y: 14, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -14, filter: 'blur(8px)' }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -636,7 +647,8 @@ export function V3_DrugHook({ onNext, onBack, onSkip, opener, sound = true, onTo
         </div>
         <motion.div
           style={{ marginTop: 34 }}
-          initial={{ opacity: 0 }}
+          // /offer opener: pill visible instantly (no fade-in).
+          initial={opener ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
         >
