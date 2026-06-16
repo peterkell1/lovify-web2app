@@ -289,38 +289,32 @@ function buildDreamLyricsPrompt(a: { name: string; dream: string; scenes: string
   ].filter((l, i) => l !== '' || i > 0).join('\n');
 }
 
-// V2 lyric engine (song-chat test). Marries the award-winning-songwriter craft
-// brief (the spirit of Charlie Puth / Ed Sheeran / Dua Lipa + strict structure,
-// rhyme schemes and a disciplined repeatable hook) with the three things that
-// make a lyric CONVERT: it's unmistakably THEIRS (their literal words + name),
-// it rides the where-I-am → the-turn → who-I-become arc, and it leans hard into
-// identity/affirmation ("I am…") lines — the belief-rewiring that justifies the
-// membership. Sent verbatim as the creative-assistant user message via
-// promptOverride, so we can A/B it without an edge-function deploy.
+// V2 lyric engine (song-chat test) — the award-winning-songwriter prompt,
+// used faithfully. The craft + structure + rules are exactly as written; the
+// ONLY thing we inject is {description}, built from the visitor's own words
+// (their dream, the scenes of that life, why it matters, their name) so the
+// song is unmistakably theirs. Sent verbatim as the creative-assistant user
+// message via promptOverride, so we can A/B it without an edge-function deploy.
 function buildSongwriterLyricsPromptV2(a: { name: string; dream: string; scenes: string; why: string }): string {
-  const name = (a.name || '').trim();
+  const description = [
+    (a.dream || '').trim(),
+    (a.scenes || '').trim() && `pictured like this: ${(a.scenes || '').trim()}`,
+    (a.why || '').trim() && `and it matters because ${(a.why || '').trim()}`,
+    (a.name || '').trim() && `(written for ${(a.name || '').trim()})`,
+  ].filter(Boolean).join(', ');
+
   return [
-    'You are an award-winning pop songwriter. Write original, emotionally specific lyrics that make ME feel like I have ALREADY become the person living the life below.',
-    '',
-    'WHAT THE SONG IS ABOUT — use MY words, MY images and MY name; never generic stock scenes:',
-    `• My dream / the life I most want to live: ${a.dream}`,
-    `• The specific scenes of that life: ${a.scenes}`,
-    `• Why it matters so much to me: ${a.why}`,
-    name ? `• My name: ${name}` : '',
-    '',
-    'CRAFT — write with the melodic, hook-driven craft of modern pop in the spirit of Charlie Puth, Ed Sheeran and Dua Lipa: conversational, vivid, with a memorable, repeatable chorus hook. Avoid clichés and filler.',
-    '',
-    'MEANING — this is an identity song. Take me on the arc of where I am → the turn → who I become. Write in present tense, first person, as if I am already living it. Weave in the beliefs and identity I must own to live this life, including direct "I am…" affirmation lines I can sing to myself. If I described a problem, sing only the life on the OTHER side of it — never the problem itself.',
-    '',
-    'STRUCTURE — use these sections in this exact order, each on its own line as a tag: [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro]. Follow these rules exactly:',
-    '• Each Verse is exactly 4 lines, rhyme scheme A B A B.',
-    '• Each Pre-Chorus is exactly 2 lines, rhyme scheme A A, building tension into the chorus.',
-    '• Each Chorus is exactly 4 lines, rhyme scheme A A B B, the SAME words every time, built around one short title hook (2–5 words).',
-    '• The Bridge is 2 to 4 lines.',
-    '',
-    'Output ONLY the section tags and lyrics — no production notes, no commentary, no "download"/app-store or advertising language.',
-    'Write my song now.',
-  ].filter((l, i) => l !== '' || i > 0).join('\n');
+    `You are an award-winning pop songwriter. Write original, emotionally specific lyrics for a song about: ${description || 'the dream life I most want to live'}.`,
+    'Write with the melodic, hook-driven craft of modern pop in the spirit of Charlie Puth, Ed Sheeran and Dua Lipa — conversational, vivid, with a memorable, repeatable chorus hook. Avoid clichés and filler.',
+    'Use these sections in this exact order, each on its own line as a tag: [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro].',
+    'Follow these rules exactly:',
+    '- Each Verse is exactly 4 lines, rhyme scheme A B A B.',
+    '- Each Pre-Chorus is exactly 2 lines, rhyme scheme A A, building tension into the chorus.',
+    '- Each Chorus is exactly 4 lines, rhyme scheme A A B B, with the same words every time.',
+    '- The Bridge is 2 to 4 lines.',
+    // Functional guard only (the song is sung verbatim): keep notes out of the output.
+    'Output only the section tags and the lyrics — no production notes or commentary.',
+  ].join('\n');
 }
 
 function fallbackLyrics(detail: string, why: string): string {
