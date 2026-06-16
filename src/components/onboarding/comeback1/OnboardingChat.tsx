@@ -307,9 +307,14 @@ const INPUT_MAX_H = 200;
 export function V3_Chat({
   genres, onPhoto, onComplete, onBack, persisted, onPersist,
   visionUrl, visionState, songs, songState, songStatusLine, onSave, web, playing, onToggleSound, onMuteSound,
-  collectEmail,
+  collectEmail, variant = 'v1',
 }: {
   genres: string[];
+  // Song-chat A/B arm. 'v1' = current flow (default; no behavioral change).
+  // 'v2' = the improved song-creation flow under test — each of the four
+  // upgrades (image prompt, detail capture, lyric prompt, genre picker) branches
+  // on this. Stamped on PostHog events upstream via `chat_variant`.
+  variant?: 'v1' | 'v2';
   // /offer funnel: ask for the email IN-CHAT as the final question (after the
   // creative questions, before the song is made). Off for the live funnels, so
   // their chat is unchanged. The email comes back on ChatResult.email.

@@ -2,8 +2,9 @@
 import { useEffect, useState } from 'react';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 import { initMetaPixel, trackPixel, getWebAttribution } from '@/lib/metaPixel';
-import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant, registerFunnel } from '@/lib/posthog';
+import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant, registerFunnel, registerChatVariant } from '@/lib/posthog';
 import { readFunnelVariant, variantPrice } from '@/lib/funnelVariant';
+import { readChatVariant } from '@/lib/chatVariant';
 import { readFunnelOffer, OFFER_PRICE, PLAN_DAY0_PRICE, readLastPlan } from '@/lib/funnelOffer';
 import { readOnboardingSessionId, claimOnboardingSession } from '@/lib/onboardingClaim';
 import { clearSnapshot, clearStoredSessionId } from '@/components/onboarding/v3/session';
@@ -75,6 +76,7 @@ export default function StartSuccessPage() {
     // normal funnel reports its A/B arm price ($1). This makes Purchase value /
     // EPC reflect real money per funnel.
     const variant = readFunnelVariant();
+    const chatVariant = readChatVariant();
     const offer = readFunnelOffer();
     // Prefer the actual plan's day-0 charge; fall back to the offer/arm price.
     const plan = readLastPlan();
@@ -93,9 +95,12 @@ export default function StartSuccessPage() {
     registerAdAttribution();
     registerFunnelVariant(variant);
     registerFunnel(funnel);
+    // Carry the song-chat arm onto the purchase too, so the V1-vs-V2 test can be
+    // measured all the way to revenue (this page is post-redirect, so re-stamp).
+    registerChatVariant(chatVariant);
     capturePostHogEvent('web_trial_started', { surface: 'web' });
     // Canonical conversion event the ads dashboard builds its funnel on.
-    capturePostHogEvent('purchase_completed', { surface: 'web', value, currency: 'USD', funnel_variant: variant, funnel });
+    capturePostHogEvent('purchase_completed', { surface: 'web', value, currency: 'USD', funnel_variant: variant, funnel, chat_variant: chatVariant });
     // Safety net: claim the staged onboarding song for the just-authenticated
     // user. The email path already claims on the account page (this is a no-op
     // then); the Apple-OAuth path bounces straight here, so it claims now.

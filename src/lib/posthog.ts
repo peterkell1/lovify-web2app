@@ -166,6 +166,19 @@ export function registerFunnel(funnel: string): void {
 }
 
 /**
+ * Register the SONG-CHAT arm ('v1' | 'v2') as a super-property, so every event
+ * — incl. song_chat_step, the generation events, checkout_started and
+ * purchase_completed — carries `chat_variant`. That's what lets us compare the
+ * current song chat (v1) vs the improved one (v2) on the magic-moment funnel
+ * and purchase rate. See chatVariant.ts.
+ */
+export function registerChatVariant(variant: string): void {
+  if (typeof window === 'undefined' || !variant) return;
+  if (!initialized) { deferUntilVisible(() => registerChatVariant(variant)); return; }
+  try { posthog.register({ chat_variant: variant }); } catch { /* ignore */ }
+}
+
+/**
  * Link the anonymous distinct_id to the authenticated user. Call once on
  * sign-in. PostHog merges the anonymous events into the identified person
  * so pre-signup activity stays attached to the user.
