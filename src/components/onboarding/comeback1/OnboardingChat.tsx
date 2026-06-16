@@ -224,6 +224,15 @@ const WRITING_LINES = [
   'Choosing words that rewire your mind…',
   'Turning it all into your anthem…',
 ];
+// V2 artist path: stage 1 while the reference is reverse-engineered.
+const ANALYZE_LINES = [
+  'Analyzing the sound…',
+  'Breaking down the style…',
+  'Mapping the lyric structure & flow…',
+  'Matching it to your story…',
+];
+// V2 artist path: stage 2 while the lyrics are written in that style.
+const WRITE_LINES_ARTIST = ['Writing lyrics for your song…', ...WRITING_LINES];
 
 function LoaderLine({ lines, centered }: { lines: string[]; centered?: boolean }) {
   const [i, setI] = useState(0);
@@ -480,6 +489,9 @@ export function V3_Chat({
   // a refresh on the review step keeps the generated lyrics in the textarea
   // (data.lyrics is persisted; this local draft state otherwise starts empty).
   const [lyricsDraft, setLyricsDraft] = useState(() => persisted?.data?.lyrics ?? '');
+  // Which loader copy the 'writing' phase shows — swapped to ANALYZE_LINES while
+  // the V2 artist reference is being reverse-engineered, then to the writing copy.
+  const [writingLines, setWritingLines] = useState<string[]>(WRITING_LINES);
 
   const idRef = useRef(persisted?.nextId ?? 0);
   const doneRef = useRef(persisted?.done ?? false);
@@ -744,10 +756,11 @@ export function V3_Chat({
         visionReq.then(setVisionIdeas).catch(() => { /* personalized fallback covers it */ });
       }
       if (variant === 'v2') {
-        // V2: one more OPTIONAL question — a song they love — before lyrics, so it
-        // can shape both the lyric style and the sound. Then straight into lyrics.
+        // V2: one more question — a song they love — before lyrics, so it shapes
+        // both the lyric style and the sound. No skip: we want them to picture a
+        // sound. Then straight into lyrics.
         setPhase('artist');
-        botSay([`Last one — is there a song or artist you'd love this to sound like? The one that gives you chills. 🎧`], 'text');
+        botSay([`What do you want your song to sound like? Name a song title or artist name that would fit perfectly with this and we'll remake your song in that style. 🎧`], 'text');
       } else {
         setPhase('photo');
         botSay([
@@ -914,8 +927,11 @@ export function V3_Chat({
   //    also becomes the song's sound, so we skip the genre step later. ──
   const chooseArtist = (value: string) => {
     data.current.artistRef = value;
+    // Stage 1: spinner + "Analyzing the sound…" while we reverse-engineer the
+    // reference (its sonic style + lyric structure/flow) in the background.
+    setWritingLines(ANALYZE_LINES);
     setPhase('writing');
-    botSay([`Ooh — love that. Let me capture that exact vibe and write your lyrics… 🧠`], 'writing');
+    setMode('writing');
     describeArtistSound(value)
       .then((brief) => {
         if (brief) {
@@ -924,13 +940,9 @@ export function V3_Chat({
         }
       })
       .catch(() => { /* couldn't ID it — the default songwriter prompt covers it */ })
-      .finally(() => writeLyrics(true));
-  };
-  const skipArtist = () => {
-    pushUser('Surprise me ✨');
-    setPhase('writing');
-    botSay([`Perfect — I'll find the sound that fits. Writing your lyrics now… 🧠`], 'writing');
-    writeLyrics(true);
+      // Stage 2: switch to "Writing lyrics for your song…" and generate them in
+      // the analyzed style.
+      .finally(() => { setWritingLines(WRITE_LINES_ARTIST); writeLyrics(true); });
   };
 
   // ── Voice chosen → write lyrics (with a live loader), then SHOW them for
@@ -1271,13 +1283,6 @@ export function V3_Chat({
           </div>
         )}
 
-        {/* Q4 (V2): the artist/song reference is optional — offer an easy skip. */}
-        {variant === 'v2' && mode === 'text' && phase === 'artist' && (
-          <ChoiceList>
-            <Choice onClick={skipArtist}>🎲 Surprise me — you pick the sound</Choice>
-          </ChoiceList>
-        )}
-
         {mode === 'sound' && (
           variant === 'v2' ? (
             <VibePicker
@@ -1466,7 +1471,7 @@ export function V3_Chat({
           />
         )}
 
-        {mode === 'writing' && <LoaderLine lines={WRITING_LINES} centered />}
+        {mode === 'writing' && <LoaderLine lines={writingLines} centered />}
 
         {mode === 'lyricsReview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
