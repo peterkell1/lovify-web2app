@@ -409,6 +409,8 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     visionKeyRef.current = key;
     setVisionUrl(null);
     setVisionState('working');
+    // Track image-generation success rate: started vs. succeeded/failed.
+    capturePostHogEvent('vision_generation_started', { flow: 'onboarding_comeback1', has_face: !!face });
     // Prefer the user's explicitly-chosen image look; fall back to their
     // free-text scene. This makes the picture specific instead of a guess.
     const prompt = visionScene
@@ -419,8 +421,11 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     // Retry up to 3 attempts before giving up so a transient miss self-heals.
     const attempt = (n: number) => {
       generateVisionWithFace(prompt, face, songAbout || 'Your Vision', '9:16')
-        .then((url) => { setVisionUrl(url); setVisionState('done'); })
-        .catch(() => { if (n < 3) setTimeout(() => attempt(n + 1), 1200); else setVisionState('failed'); });
+        .then((url) => { setVisionUrl(url); setVisionState('done'); capturePostHogEvent('vision_generation_succeeded', { flow: 'onboarding_comeback1', attempt: n }); })
+        .catch(() => {
+          if (n < 3) setTimeout(() => attempt(n + 1), 1200);
+          else { setVisionState('failed'); capturePostHogEvent('vision_generation_failed', { flow: 'onboarding_comeback1', attempts: n }); }
+        });
     };
     attempt(1);
   }, [visionState]);
@@ -437,6 +442,8 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     // The standalone /offer funnel renders with Suno (Kie.ai) for a higher-wow
     // song to justify the upfront price; the live funnels stay on the default.
     const model = offer === 'annual99' ? 'suno' : undefined;
+    // Track song-generation success rate: started vs. succeeded/failed.
+    capturePostHogEvent('song_generation_started', { flow: 'onboarding_comeback1', model: model || 'default' });
     // Instant reveal: as each take's stream URL lands (~15s), show + play it
     // right away instead of waiting ~60s for the permanent file. The permanent
     // files hot-swap in below (and are what get saved).
@@ -453,13 +460,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       .then((finished) => {
         setSongs(finished); // hot-swap stream → permanent (the saved files)
         setSongState('done');
+        capturePostHogEvent('song_generation_succeeded', { flow: 'onboarding_comeback1', model: model || 'default', count: finished.filter((s) => s?.audio_url).length });
         // /offer: deliver on the gate's promise — email them a copy of their
         // song. Fire-and-forget; uses the song hosted on our storage.
         if (offer === 'annual99' && offerEmailRef.current && finished[0]?.audio_url) {
           void sendSongEmail({ email: offerEmailRef.current, title: finished[0].title || title, songUrl: finished[0].audio_url });
         }
       })
-      .catch(() => setSongState('failed'));
+      .catch(() => { setSongState('failed'); capturePostHogEvent('song_generation_failed', { flow: 'onboarding_comeback1', model: model || 'default' }); });
   }, [songState, offer]);
 
   // ── Stage the SAVED song against the session (Phase 2/4) ──
