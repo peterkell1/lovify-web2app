@@ -32,6 +32,7 @@ export function VoiceDump({
   label?: string;
 }) {
   const [state, setState] = useState<RecState>('idle');
+  const [err, setErr] = useState<'' | 'blocked' | 'generic'>('');
   const [secs, setSecs] = useState(0);
 
   // Path A — on-device speech recognition (preferred when present).
@@ -72,6 +73,7 @@ export function VoiceDump({
   // ── Path A: on-device ──
   const startSR = () => {
     onStart?.();
+    setErr('');
     try {
       const rec = new SR();
       rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = true;
@@ -82,10 +84,11 @@ export function VoiceDump({
         }
       };
       // Engines end on any pause (iOS caps sessions); restart while held.
-      rec.onend = () => { if (keepAliveRef.current) { try { rec.start(); return; } catch { /* give up */ } } keepAliveRef.current = false; clearTimer(); setState('idle'); };
+      // Don't clobber an error state we just set (onerror fires, THEN onend).
+      rec.onend = () => { if (keepAliveRef.current) { try { rec.start(); return; } catch { /* give up */ } } keepAliveRef.current = false; clearTimer(); setState((s) => (s === 'error' ? 'error' : 'idle')); };
       rec.onerror = (e: any) => {
         if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed' || e?.error === 'audio-capture') {
-          keepAliveRef.current = false; clearTimer(); setState('error');
+          keepAliveRef.current = false; clearTimer(); setErr('blocked'); setState('error');
         }
       };
       srRef.current = rec;
@@ -99,6 +102,7 @@ export function VoiceDump({
   // ── Path B: record + server ──
   const startRec = async () => {
     onStart?.();
+    setErr('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream; chunksRef.current = [];
@@ -109,10 +113,10 @@ export function VoiceDump({
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' });
         if (!blob.size) { setState('idle'); return; }
         setState('working');
-        try { const t = await transcribeAudio(blob); onText(t); markUsed(); setState('idle'); } catch { setState('error'); }
+        try { const t = await transcribeAudio(blob); onText(t); markUsed(); setState('idle'); } catch { setErr('generic'); setState('error'); }
       };
       recRef.current = rec; rec.start(); setState('active'); startTimer();
-    } catch { stopTracks(); setState('error'); }
+    } catch { stopTracks(); setErr('blocked'); setState('error'); }
   };
   const stopRec = () => { clearTimer(); try { recRef.current?.stop?.(); } catch { /* ignore */ } };
 
@@ -160,7 +164,9 @@ export function VoiceDump({
       </motion.button>
       {state === 'error' && (
         <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: LOVIFY.sub, textAlign: 'center', marginTop: 6 }}>
-          Didn&apos;t catch that — tap to try again, or just type below.
+          {err === 'blocked'
+            ? 'Mic access is off here — allow it in your browser (or open on your phone), or just type below 👇'
+            : 'Didn’t catch that — tap to try again, or just type below 👇'}
         </div>
       )}
     </div>
