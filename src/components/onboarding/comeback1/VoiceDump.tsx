@@ -3,165 +3,203 @@
 /**
  * Voice-first capture for the song-chat V2 — the "just talk, don't type" path.
  *
- * Records a clip with MediaRecorder + getUserMedia and sends it to the
- * `transcribe-audio` edge fn (server-side speech-to-text). This works inside the
- * iOS Instagram/Facebook in-app webviews where the on-device SpeechRecognition
- * mic is unavailable — i.e. for the bulk of the ad traffic. The transcript is
- * appended to the chat draft, so the user can talk, then lightly edit.
+ * HYBRID by design, so it works everywhere:
+ *   • On-device speech (SpeechRecognition) when the browser supports it — instant,
+ *     no backend, live text. This is what works in Safari/Chrome right now.
+ *   • Record + server transcription (MediaRecorder → transcribe-audio edge fn)
+ *     as the fallback for the iOS Instagram/Facebook in-app webviews where the
+ *     on-device API doesn't exist — i.e. the bulk of the ad traffic.
  *
- * Degrades to null when recording isn't supported, so typing + the on-device
- * mic remain. On a transcription failure it shows a gentle retry/"type instead"
- * state rather than blocking the funnel.
+ * The transcript is appended to the chat draft, so the user can talk then lightly
+ * edit. Degrades to null only when NEITHER path is available (typing remains). A
+ * failure shows a gentle retry/"type instead" line rather than blocking.
  */
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { transcribeAudio } from '@/components/onboarding/v3/generation';
 import { LOVIFY, SANS } from '@/components/onboarding/v3/theme';
 
-const MAX_SECONDS = 90; // auto-stop so a clip never balloons the upload
+const MAX_SECONDS = 90; // auto-stop so a clip never balloons / runs forever
 
-type RecState = 'idle' | 'recording' | 'working' | 'error';
+type RecState = 'idle' | 'active' | 'working' | 'error';
 
 export function VoiceDump({
   onText, onStart, onUsed, label = 'Tap to talk — just say it out loud',
 }: {
-  onText: (t: string) => void;          // append the transcript to the draft
-  onStart?: () => void;                 // fired on record start (kills ambient music)
-  onUsed?: () => void;                  // analytics hook (first successful dump)
+  onText: (t: string) => void;
+  onStart?: () => void;
+  onUsed?: () => void;
   label?: string;
 }) {
   const [state, setState] = useState<RecState>('idle');
   const [secs, setSecs] = useState(0);
+
+  // Path A — on-device speech recognition (preferred when present).
+  const SR = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
+  const srRef = useRef<any>(null);
+  const keepAliveRef = useRef(false);
+
+  // Path B — record + server transcription (in-app fallback).
+  const canRecord = typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+
   const timerRef = useRef<number | null>(null);
+  const usedRef = useRef(false);
 
-  const supported = typeof window !== 'undefined'
-    && !!navigator.mediaDevices?.getUserMedia
-    && typeof MediaRecorder !== 'undefined';
+  const supported = !!SR || canRecord;
 
-  const stopTracks = () => {
-    try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-    streamRef.current = null;
-  };
   const clearTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+  const stopTracks = () => { try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ } streamRef.current = null; };
+  const markUsed = () => { if (!usedRef.current) { usedRef.current = true; onUsed?.(); } };
 
-  useEffect(() => () => { clearTimer(); stopTracks(); try { recRef.current?.stop?.(); } catch { /* ignore */ } }, []);
+  useEffect(() => () => {
+    keepAliveRef.current = false; clearTimer(); stopTracks();
+    try { srRef.current?.stop?.(); } catch { /* ignore */ }
+    try { recRef.current?.stop?.(); } catch { /* ignore */ }
+  }, []);
 
   if (!supported) return null;
 
-  const stop = () => {
-    clearTimer();
-    try { recRef.current?.stop?.(); } catch { /* ignore */ }
+  const startTimer = () => {
+    setSecs(0);
+    timerRef.current = window.setInterval(() => {
+      setSecs((s) => { if (s + 1 >= MAX_SECONDS) { stop(); return MAX_SECONDS; } return s + 1; });
+    }, 1000);
   };
 
-  const start = async () => {
+  // ── Path A: on-device ──
+  const startSR = () => {
+    onStart?.();
+    try {
+      const rec = new SR();
+      rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = true;
+      rec.onresult = (e: any) => {
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) { const t = (r[0]?.transcript || '').trim(); if (t) { onText(t); markUsed(); } }
+        }
+      };
+      // Engines end on any pause (iOS caps sessions); restart while held.
+      rec.onend = () => { if (keepAliveRef.current) { try { rec.start(); return; } catch { /* give up */ } } keepAliveRef.current = false; clearTimer(); setState('idle'); };
+      rec.onerror = (e: any) => {
+        if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed' || e?.error === 'audio-capture') {
+          keepAliveRef.current = false; clearTimer(); setState('error');
+        }
+      };
+      srRef.current = rec;
+      rec.start();
+      keepAliveRef.current = true;
+      setState('active'); startTimer();
+    } catch { setState('error'); }
+  };
+  const stopSR = () => { keepAliveRef.current = false; clearTimer(); try { srRef.current?.stop?.(); } catch { /* ignore */ } setState('idle'); };
+
+  // ── Path B: record + server ──
+  const startRec = async () => {
     onStart?.();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      chunksRef.current = [];
+      streamRef.current = stream; chunksRef.current = [];
       const rec = new MediaRecorder(stream);
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
       rec.onstop = async () => {
-        stopTracks();
+        stopTracks(); clearTimer();
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' });
         if (!blob.size) { setState('idle'); return; }
         setState('working');
-        try {
-          const text = await transcribeAudio(blob);
-          onText(text);
-          onUsed?.();
-          setState('idle');
-        } catch {
-          setState('error');
-        }
+        try { const t = await transcribeAudio(blob); onText(t); markUsed(); setState('idle'); } catch { setState('error'); }
       };
-      recRef.current = rec;
-      rec.start();
-      setState('recording');
-      setSecs(0);
-      timerRef.current = window.setInterval(() => {
-        setSecs((s) => {
-          if (s + 1 >= MAX_SECONDS) { stop(); return MAX_SECONDS; }
-          return s + 1;
-        });
-      }, 1000);
-    } catch {
-      // Permission denied or no device — fall back silently to typing.
-      stopTracks();
-      setState('error');
-    }
+      recRef.current = rec; rec.start(); setState('active'); startTimer();
+    } catch { stopTracks(); setState('error'); }
   };
+  const stopRec = () => { clearTimer(); try { recRef.current?.stop?.(); } catch { /* ignore */ } };
 
-  const mmss = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-  const recording = state === 'recording';
+  const start = () => (SR ? startSR() : startRec());
+  const stop = () => (SR ? stopSR() : stopRec());
+
+  const active = state === 'active';
   const working = state === 'working';
+  const mmss = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
   return (
-    <div style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
+    <div style={{ alignSelf: 'stretch', marginTop: 2 }}>
       <motion.button
         initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-        onClick={working ? undefined : (recording ? stop : start)}
+        onClick={working ? undefined : (active ? stop : start)}
         disabled={working}
-        aria-label={recording ? 'Stop recording' : 'Record your answer'}
+        aria-label={active ? 'Stop recording' : 'Record your answer'}
         style={{
-          width: '100%', cursor: working ? 'default' : 'pointer',
-          padding: '14px 18px', borderRadius: 18,
-          background: recording ? LOVIFY.orangeGradient : LOVIFY.orangeGradientSoft,
-          border: `1.5px solid ${LOVIFY.orange}`,
-          color: recording ? '#fff' : LOVIFY.orangeDeep,
-          fontFamily: SANS, fontSize: 15.5, fontWeight: 800,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          boxShadow: '0 10px 24px -14px rgba(216,92,28,0.6)',
+          width: '100%', cursor: working ? 'default' : 'pointer', textAlign: 'left',
+          display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px',
+          borderRadius: 16, background: 'rgba(255,251,244,0.97)',
+          border: `1.5px solid ${active ? LOVIFY.orange : LOVIFY.line}`,
+          boxShadow: active ? '0 10px 24px -12px rgba(216,92,28,0.5)' : '0 5px 14px -10px rgba(216,92,28,0.3)',
         }}
       >
-        {working ? (
-          <>
-            <Dots /> <span>Turning your voice into words…</span>
-          </>
-        ) : recording ? (
-          <>
-            <RecPulse /> <span>Stop &amp; use this · {mmss}</span>
-          </>
-        ) : (
-          <>
-            <span style={{ fontSize: 19 }}>🎤</span> <span>{label}</span>
-          </>
-        )}
+        <span style={{ position: 'relative', width: 38, height: 38, borderRadius: 19, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: active ? '#E5484D' : LOVIFY.orangeGradient }}>
+          {active && (
+            <motion.span aria-hidden
+              style={{ position: 'absolute', inset: 0, borderRadius: 19, background: '#E5484D' }}
+              animate={{ scale: [1, 1.6], opacity: [0.5, 0] }} transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
+            />
+          )}
+          <span style={{ position: 'relative', display: 'flex' }}>{active ? <StopGlyph /> : <MicGlyph />}</span>
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: SANS, fontSize: 14.5, fontWeight: 700, color: active ? LOVIFY.orangeDeep : LOVIFY.ink }}>
+            {working ? 'Turning your voice into words…' : active ? 'Listening… tap to stop' : label}
+          </div>
+          <div style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: LOVIFY.subSoft, marginTop: 1 }}>
+            {working ? 'One sec…' : active ? `${mmss} · say everything you picture` : 'No typing — just talk, we’ll write it down'}
+          </div>
+        </div>
+        {active && <Bars />}
+        {working && <Dots />}
       </motion.button>
-      {recording && (
-        <span style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: LOVIFY.sub, textAlign: 'center' }}>
-          Keep going — say everything you picture. Tap when you&apos;re done.
-        </span>
-      )}
       {state === 'error' && (
-        <span style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: LOVIFY.sub, textAlign: 'center' }}>
+        <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: LOVIFY.sub, textAlign: 'center', marginTop: 6 }}>
           Didn&apos;t catch that — tap to try again, or just type below.
-        </span>
+        </div>
       )}
     </div>
   );
 }
 
-function RecPulse() {
+function MicGlyph() {
   return (
-    <motion.span
-      aria-hidden
-      style={{ width: 12, height: 12, borderRadius: 6, background: '#fff', display: 'inline-block' }}
-      animate={{ opacity: [1, 0.35, 1], scale: [1, 0.85, 1] }}
-      transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
-    />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }
-
+function StopGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="#fff" />
+    </svg>
+  );
+}
+function Bars() {
+  return (
+    <span aria-hidden style={{ display: 'inline-flex', gap: 3, alignItems: 'center', height: 20, flexShrink: 0 }}>
+      {[0, 1, 2, 3].map((i) => (
+        <motion.span key={i}
+          style={{ width: 3, borderRadius: 2, background: LOVIFY.orange }}
+          animate={{ height: [6, 17, 6] }}
+          transition={{ duration: 0.7, repeat: Infinity, ease: 'easeInOut', delay: i * 0.12 }}
+        />
+      ))}
+    </span>
+  );
+}
 function Dots() {
   return (
-    <span aria-hidden style={{ display: 'inline-flex', gap: 4 }}>
+    <span aria-hidden style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
       {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
+        <motion.span key={i}
           style={{ width: 6, height: 6, borderRadius: 3, background: LOVIFY.orangeDeep, display: 'inline-block' }}
           animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
           transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut', delay: i * 0.15 }}

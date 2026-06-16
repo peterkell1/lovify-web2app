@@ -894,6 +894,9 @@ export function V3_Chat({
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
     : mode === 'visionScene' || mode === 'visionText' ? 'Or describe how you want to look…'
+    // V2 voice steps move the mic into the hero "Tap to talk" card above, so the
+    // input bar is the "type instead" path — don't point at a mic that isn't here.
+    : (variant === 'v2' && (phase === 'detail' || phase === 'scene' || phase === 'why')) ? 'Or type it instead…'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     : (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) ? 'Type or tap 🎤 to speak…' : 'Type your answer…';
 
@@ -1300,7 +1303,7 @@ export function V3_Chat({
                 resize: 'none', overflowY: 'auto', maxHeight: INPUT_MAX_H,
               }}
             />
-            {phase !== 'name' && <MicButton onStart={onMuteSound} onResult={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)} />}
+            {phase !== 'name' && !(variant === 'v2' && (phase === 'detail' || phase === 'scene' || phase === 'why')) && <MicButton onStart={onMuteSound} onResult={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)} />}
             <button
               onClick={sendOrContinue}
               disabled={!sendActive()}
