@@ -94,6 +94,10 @@ function doInitPostHog(): void {
       // Pageviews are useful for SPA route tracking and come for free.
       capture_pageview: true,
       capture_pageleave: true,
+      // Capture uncaught errors + unhandled promise rejections into PostHog error
+      // tracking. Was off, so the funnel's JS errors (e.g. the Instagram in-app
+      // browser blank screen) were invisible. Now they surface as $exception.
+      capture_exceptions: true,
       // Session recording ON so we can watch real onboarding sessions and see
       // exactly where users hesitate / drop off (complements Clarity).
       disable_session_recording: false,
