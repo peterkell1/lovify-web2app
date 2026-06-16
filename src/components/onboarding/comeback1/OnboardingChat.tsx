@@ -606,7 +606,7 @@ export function V3_Chat({
   const introMsgs = (): string[] => [
     web
       ? (variant === 'v2'
-          ? "Hey — let's make your first song, designed to help you create a life you love. 🎶"
+          ? "Hey, I'm Lovify! Let's make music that helps you create a life you love! 🎶"
           : "Hey it's Lovify. It's time to become the person you were meant to be!")
       : "Hey! I'm going to help you make your very first song. 🎶",
     web ? "First, what's your name?" : "First — what should I call you?",
@@ -678,11 +678,10 @@ export function V3_Chat({
       flipReqRef.current = true;
       if (variant === 'v2') {
         // V2: no "thank you for sharing" beat and no busy wait — go STRAIGHT to a
-        // concrete, easy-to-answer Q2. The flip ideas still pre-warm in the
-        // background so the "Help me imagine" chips are ready if they want them.
-        suggestFlippedDreams(value).then((r) => setFlipIdeas(r.ideas)).catch(() => { /* static set covers it */ });
+        // concrete, easy-to-answer Q2. (No flip-idea fetch — V2 has no "Help me
+        // imagine" chips; it pushes people to their own words + the mic.)
         botSay([
-          `Now close your eyes and picture that life. How would you describe the best version of yourself in it? Where are you? Who's with you? Be specific.`,
+          `Now how would you describe the best version of yourself in this life? Where do you live? Who's with you? Be specific.`,
         ], 'text');
       } else {
         const req = suggestFlippedDreams(value)
@@ -724,7 +723,7 @@ export function V3_Chat({
       }
       setPhase('photo');
       if (variant === 'v2') {
-        botSay([`Last thing — add a photo of you (and anyone else you want in your song's picture). 📸`], 'photo');
+        botSay([`Add your photo so we can create a vision of you living this dream 📸`], 'photo');
       } else {
         botSay([
           `That's the real you talking — and that's the heart of your song.`,
@@ -926,9 +925,8 @@ export function V3_Chat({
     : mode === 'sound' ? 'Or describe the sound you want…'
     : mode === 'voice' ? 'Or describe the voice you want…'
     : mode === 'visionScene' || mode === 'visionText' ? 'Or describe how you want to look…'
-    // V2 voice steps move the mic into the hero "Tap to talk" card above, so the
-    // input bar is the "type instead" path — don't point at a mic that isn't here.
-    : (variant === 'v2' && (phase === 'detail' || phase === 'scene' || phase === 'why')) ? 'Or type it instead…'
+    // V2 voice steps: a mic sits in the input bar — nudge them to just talk.
+    : (variant === 'v2' && (phase === 'detail' || phase === 'scene' || phase === 'why')) ? 'Tap 🎤 and just talk — or type'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     : (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) ? 'Type or tap 🎤 to speak…' : 'Type your answer…';
 
@@ -1074,23 +1072,6 @@ export function V3_Chat({
           <Bubble key={m.id} msg={m} />
         ))}
 
-        {/* V2 voice-first: on the three "tell me about your dream" steps, lead
-            with a big tap-to-talk recorder (server transcription, so it works in
-            the in-app webviews where the on-device mic doesn't). It appends to
-            the draft; the chips below + typing remain as fallbacks. */}
-        {variant === 'v2' && mode === 'text' && (phase === 'detail' || phase === 'scene' || phase === 'why') && (
-          <VoiceDump
-            onStart={onMuteSound}
-            onText={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)}
-            onUsed={() => capturePostHogEvent('voice_dump_used', { flow: 'onboarding_comeback1', step: phase })}
-            label={phase === 'detail'
-              ? 'Tap to talk — describe your dream life'
-              : phase === 'why'
-                ? 'Tap to talk — say why it matters'
-                : 'Tap to talk — paint the scene'}
-          />
-        )}
-
         {/* "Help me imagine" lives right under the AI's question — a gentle hand
             for anyone who's stuck or low. Left-aligned like a bot affordance so
             it reads as part of the assistant's message. Hidden on the name step. */}
@@ -1098,12 +1079,15 @@ export function V3_Chat({
             want and just type it. "✨ Help me imagine" opens the brainstorm
             chips for anyone who's stuck (AI ideas keep pre-warming in the
             background either way, so the open feels instant). */}
-        {mode === 'text' && phase === 'scene' && flipPending && showIdeas && (
+        {/* V2 drops "Help me imagine" entirely — the magic-wand question + the
+            mic push people to their OWN specific life instead of anchoring on
+            generic suggestions (and it de-clutters the step). v1 keeps it. */}
+        {variant !== 'v2' && mode === 'text' && phase === 'scene' && flipPending && showIdeas && (
           <div style={{ alignSelf: 'flex-start' }}>
             <LoaderLine lines={IDEA_LOADING_LINES} />
           </div>
         )}
-        {mode === 'text' && phase !== 'name' && (currentIdeas().length > 0 || (phase === 'scene' && flipPending)) && !(flipPending && showIdeas) && (
+        {variant !== 'v2' && mode === 'text' && phase !== 'name' && (currentIdeas().length > 0 || (phase === 'scene' && flipPending)) && !(flipPending && showIdeas) && (
           (showIdeas && currentIdeas().length > 0) ? (
             <motion.div
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -1337,7 +1321,16 @@ export function V3_Chat({
                 resize: 'none', overflowY: 'auto', maxHeight: INPUT_MAX_H,
               }}
             />
-            {phase !== 'name' && !(variant === 'v2' && (phase === 'detail' || phase === 'scene' || phase === 'why')) && <MicButton onStart={onMuteSound} onResult={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)} />}
+            {variant === 'v2' && (phase === 'detail' || phase === 'scene' || phase === 'why') ? (
+              // V2: a compact mic right in the input bar (next to send) — tap and
+              // brain-dump. Hybrid recorder (on-device + server transcription).
+              <VoiceDump
+                compact
+                onStart={onMuteSound}
+                onText={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)}
+                onUsed={() => capturePostHogEvent('voice_dump_used', { flow: 'onboarding_comeback1', step: phase })}
+              />
+            ) : (phase !== 'name' && <MicButton onStart={onMuteSound} onResult={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)} />)}
             <button
               onClick={sendOrContinue}
               disabled={!sendActive()}

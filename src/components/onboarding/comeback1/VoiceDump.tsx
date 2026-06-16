@@ -24,12 +24,15 @@ const MAX_SECONDS = 90; // auto-stop so a clip never balloons / runs forever
 type RecState = 'idle' | 'active' | 'working' | 'error';
 
 export function VoiceDump({
-  onText, onStart, onUsed, label = 'Tap to talk — just say it out loud',
+  onText, onStart, onUsed, label = 'Tap to talk — just say it out loud', compact = false,
 }: {
   onText: (t: string) => void;
   onStart?: () => void;
   onUsed?: () => void;
   label?: string;
+  // compact = a single round mic button sized for the input bar (next to send),
+  // instead of the big hero card. Same hybrid record logic, minimal chrome.
+  compact?: boolean;
 }) {
   const [state, setState] = useState<RecState>('idle');
   const [err, setErr] = useState<'' | 'blocked' | 'generic'>('');
@@ -126,6 +129,36 @@ export function VoiceDump({
   const active = state === 'active';
   const working = state === 'working';
   const mmss = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+
+  // Compact: a single round mic button that lives in the input bar next to send.
+  if (compact) {
+    return (
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        {state === 'error' && (
+          <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, width: 212, padding: '8px 11px', borderRadius: 12, background: '#fff', border: `1px solid ${LOVIFY.line}`, boxShadow: '0 10px 24px -12px rgba(58,42,34,0.5)', fontFamily: SANS, fontSize: 12, fontWeight: 600, color: LOVIFY.sub, lineHeight: 1.35, zIndex: 5 }}>
+            {err === 'blocked'
+              ? 'Mic is off here — allow it in your browser (or open on your phone), or just type.'
+              : 'Didn’t catch that — tap to try again, or type.'}
+          </div>
+        )}
+        <button
+          onClick={working ? undefined : (active ? stop : start)}
+          disabled={working}
+          aria-label={active ? 'Stop recording' : 'Record your answer'}
+          style={{
+            width: 46, height: 46, borderRadius: 23, flexShrink: 0, cursor: working ? 'default' : 'pointer',
+            border: `1.5px solid ${active ? LOVIFY.orange : LOVIFY.line}`,
+            background: active ? LOVIFY.orangeGradient : 'rgba(255,251,244,0.9)',
+            color: active ? '#fff' : LOVIFY.orangeDeep,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            animation: active ? 'lovPulse 1.1s ease-in-out infinite' : 'none',
+          }}
+        >
+          {working ? <Dots /> : <span style={{ fontSize: 18 }}>{active ? '⏹' : '🎤'}</span>}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ alignSelf: 'stretch', marginTop: 2 }}>
