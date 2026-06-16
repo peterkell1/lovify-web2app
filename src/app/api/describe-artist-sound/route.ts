@@ -1,67 +1,13 @@
-// Supabase Edge Function: describe-artist-sound
-// ---------------------------------------------------------------------------
-// Song-chat V2 — the optional "a song you'd love this to sound like?" question.
-// Reverse-engineers a reference (artist or song) into a name/voice-free
-// production blueprint + lyric-writing rulebook, so the music engine and the
-// songwriter can both adopt the STYLE without ever naming or quoting the artist.
-//
-// Returns JSON: { styleDescription, lyricalFormula, structuralDynamics,
-//                 styleSpecificTraps[] }  OR  { notFound, suggestion }.
-//
-// Runs on Claude Sonnet via the Anthropic API directly.
-// DEPLOY:
-//   supabase functions deploy describe-artist-sound --no-verify-jwt
-//   supabase secrets set ANTHROPIC_API_KEY=...   (likely already set for the app)
+// In-app API route — the song-chat V2 "a song you'd love this to sound like?"
+// breakdown. Reverse-engineers a reference (artist/song) into a name/voice-free
+// production blueprint + lyric rulebook via Claude Sonnet. Runs server-side, so
+// it deploys with the app (no separate edge-function deploy).
+import { NextRequest, NextResponse } from "next/server";
+import { callClaude, extractJson } from "@/lib/anthropic";
 
-// If your account uses a different Sonnet id, change this one line.
-const MODEL = 'claude-sonnet-4-6';
-
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
-
-// Call Claude Sonnet on the Anthropic Messages API directly.
-async function callClaude(system: string, user: string, maxTokens: number): Promise<string> {
-  const key = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }],
-    }),
-  });
-  const raw = await res.text();
-  if (!res.ok) throw new Error(`anthropic ${res.status}: ${raw.slice(0, 500)}`);
-  let data: any;
-  try { data = JSON.parse(raw); } catch { throw new Error(`anthropic non-JSON: ${raw.slice(0, 500)}`); }
-  const content = data?.content;
-  if (!Array.isArray(content)) throw new Error(`anthropic unexpected shape: ${JSON.stringify(data).slice(0, 500)}`);
-  return content.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
-}
-
-// Claude returns prose-wrapped or fenced JSON sometimes — extract the object.
-function extractJson(text: string): Record<string, unknown> {
-  let t = text.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) t = fence[1].trim();
-  if (!t.startsWith('{')) {
-    const s = t.indexOf('{'); const e = t.lastIndexOf('}');
-    if (s >= 0 && e > s) t = t.slice(s, e + 1);
-  }
-  return JSON.parse(t);
-}
+// The Claude call can take ~15-30s — allow headroom (needs a Vercel plan that
+// permits longer function durations).
+export const maxDuration = 60;
 
 const SYSTEM = `You are a world-class music producer and lyric analyst. Your job is to reverse-engineer the SONIC STYLE and LYRIC-WRITING TECHNIQUE of a given artist or song.
 
@@ -102,17 +48,14 @@ Output ONLY the JSON object. No explanation, no markdown formatting.`;
 const userMsg = (ref: string) =>
   `Reverse-engineer "${ref}". For styleDescription: what are the exact sonic control signals a producer would need? For lyricalFormula: what are the specific line-construction RULES a ghostwriter would follow to write new lyrics that feel structurally identical — on any topic? For structuralDynamics: how do the lyrics and production push and pull against each other? For styleSpecificTraps: what are the 3 biggest mistakes a ghostwriter would make trying to imitate THIS artist's lyric style?`;
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
-  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+export async function POST(req: NextRequest) {
   try {
-    let body: any = {};
-    try { body = await req.json(); } catch { body = {}; }
-    const artistOrSong = String(body?.artistOrSong || '').trim();
-    if (!artistOrSong) return json({ error: 'missing artistOrSong' }, 400);
-    const text = await callClaude(SYSTEM, userMsg(artistOrSong), 2000);
-    return json(extractJson(text));
+    const body = await req.json().catch(() => ({}));
+    const ref = String(body?.artistOrSong || "").trim();
+    if (!ref) return NextResponse.json({ error: "missing artistOrSong" }, { status: 400 });
+    const text = await callClaude(SYSTEM, userMsg(ref), 2000);
+    return NextResponse.json(extractJson(text));
   } catch (e) {
-    return json({ error: String((e as Error)?.message || e) }, 500);
+    return NextResponse.json({ error: String((e as Error)?.message || e) }, { status: 500 });
   }
-});
+}

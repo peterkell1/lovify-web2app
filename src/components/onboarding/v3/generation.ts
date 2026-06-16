@@ -90,7 +90,11 @@ export async function transcribeAudio(audio: Blob): Promise<string> {
 // `prompt` becomes the brief for their vision image when they pick it. Replaces
 // the unreliable/generic suggest-comeback-ideas path for V2.
 export async function suggestVisionScenes(a: { dream: string; scene: string; why: string }): Promise<{ e: string; t: string; prompt: string }[]> {
-  const res = await authedFetch('suggest-vision-scenes', { dream: a.dream, scene: a.scene, why: a.why });
+  // In-app API route (server-side Claude) — deploys with the app, no edge fn.
+  const res = await fetch('/api/suggest-vision-scenes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dream: a.dream, scene: a.scene, why: a.why }),
+  });
   if (!res.ok) throw new Error(`suggest-vision-scenes failed (${res.status})`);
   const data = await res.json();
   const v = (Array.isArray(data?.visions) ? data.visions : [])
@@ -118,7 +122,11 @@ export interface ArtistBrief {
   styleSpecificTraps: string[];
 }
 export async function describeArtistSound(ref: string): Promise<ArtistBrief | null> {
-  const res = await authedFetch('describe-artist-sound', { artistOrSong: ref });
+  // In-app API route (server-side Claude) — deploys with the app, no edge fn.
+  const res = await fetch('/api/describe-artist-sound', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ artistOrSong: ref }),
+  });
   if (!res.ok) throw new Error(`describe-artist-sound failed (${res.status})`);
   const data = await res.json();
   if (!data || data.notFound) return null;
