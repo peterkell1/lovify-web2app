@@ -24,7 +24,7 @@ import {
 } from './screens';
 import { V3_Chat, type ChatPersist } from './OnboardingChat';
 import {
-  generateVisionWithFace, buildVisionPrompt, generateTwoSongs, sendSongEmail,
+  generateVisionWithFace, buildVisionPrompt, buildVisionPromptV2, generateTwoSongs, sendSongEmail,
   type GeneratedSong,
 } from '@/components/onboarding/v3/generation';
 import { useRouter } from 'next/navigation';
@@ -435,9 +435,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     capturePostHogEvent('vision_generation_started', { flow: 'onboarding_comeback1', has_face: !!face });
     // Prefer the user's explicitly-chosen image look; fall back to their
     // free-text scene. This makes the picture specific instead of a guess.
-    const prompt = visionScene
-      ? buildVisionPrompt({ songAbout, scene: visionScene, detailText })
-      : buildVisionPrompt({ songAbout, scene, detailText });
+    // V2 (the song-chat test) feeds the WHOLE story — incl. why it matters — into
+    // a richer, golden-hour-free prompt so the image is specific + theirs.
+    const why = stateRef.current?.why || '';
+    const prompt = chatVariant === 'v2'
+      ? buildVisionPromptV2({ songAbout, scene, detailText, why, visionScene })
+      : visionScene
+        ? buildVisionPrompt({ songAbout, scene: visionScene, detailText })
+        : buildVisionPrompt({ songAbout, scene, detailText });
     // The image model (FAL/nano-banana) can be slow or flaky — a single timeout
     // used to leave the user staring at the "you, living it" fallback forever.
     // Retry up to 3 attempts before giving up so a transient miss self-heals.
@@ -450,7 +455,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
         });
     };
     attempt(1);
-  }, [visionState]);
+  }, [visionState, chatVariant]);
 
   const startSongGen = useCallback((lyrics: string, title: string, style: string, voice: string) => {
     const key = `${title}|${lyrics.slice(0, 80)}`;

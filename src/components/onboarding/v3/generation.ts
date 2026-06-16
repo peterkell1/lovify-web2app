@@ -289,6 +289,42 @@ export function buildVisionPrompt(a: { songAbout: string; scene: string; detailT
   ].join(' ');
 }
 
+/** V2 vision brief — the song-chat V2 test.
+ *
+ * The whole point of the vision image is to let someone SEE themselves living
+ * the exact dream they just described, so it has to be specific and theirs, not
+ * a generic "happy, golden-hour" stock mood (the #1 reason v1 images fell flat).
+ *
+ * So this feeds the model the FULL story, not just the scene:
+ *   • dream      — the specific, picked vision look (or their own words)
+ *   • specifics  — the concrete details they typed ("dolphins jumping by my deck")
+ *   • feeling    — WHY it matters, so the emotion + identity shows on their face
+ * and deliberately drops "golden hour / vision-board" — the lighting should be
+ * whatever is TRUE to that specific moment, not a preset. Face fidelity is hard
+ * non-negotiable: this only lands if it's unmistakably them. */
+export function buildVisionPromptV2(a: {
+  songAbout?: string; scene?: string; detailText?: string; why?: string; visionScene?: string;
+}): string {
+  // Strip preset "golden hour" phrasing out of the picked look so it can't fight
+  // the true-to-scene lighting we ask for below (some idea prompts bake it in).
+  const clean = (s: string) => (s || '').replace(/\bgolden[\s-]?hour\b/gi, '').replace(/\bgolden light\b/gi, '').replace(/\s+/g, ' ').trim();
+  const dream = clean(a.visionScene || a.scene || a.detailText || a.songAbout || 'living their dream life');
+  const det = (a.detailText || '').trim();
+  const specifics = det && clean(det) !== dream
+    ? ` Specific details in their own words: ${det}.` : '';
+  const feeling = (a.why || '').trim()
+    ? ` Why this matters to them: ${(a.why || '').trim()} — let that emotion read on their face and in the mood of the shot.` : '';
+  return [
+    `Photorealistic, cinematic vertical (9:16) photograph of the exact person in the reference photo, fully living this dream: ${dream}.`,
+    specifics,
+    feeling,
+    ` They are unmistakably the hero of the frame — present and immersed in the moment, living it rather than posing.`,
+    ` Keep their face completely true to the reference photo: same identity, features, and age — it must clearly be them.`,
+    ` Use real, true-to-scene natural lighting that fits this exact moment (NOT a golden-hour preset), with rich depth and lifelike detail.`,
+    ` Immersive and emotional, like a still frame from a film of their life. Absolutely no text, captions, watermark, or logos.`,
+  ].join('').replace(/\s+/g, ' ').trim();
+}
+
 // ─── 4. Song (Mureka via router) + polling ──────────────────────
 // start:  generate-song-router ← { lyrics, title, style, vocalGender } → { taskId }
 // poll:   generate-song-router ← { taskId } → { status, songs:[{title,audio_url,image_url,...}] }

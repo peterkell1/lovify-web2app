@@ -189,6 +189,15 @@ const VISION_SCENE_DEFAULT = [
   { e: '🕊️', t: 'The calm, at-peace me', prompt: 'as a calm, serene, at-peace version of myself, soft natural light' },
   { e: '🎉', t: 'Me, celebrating life', prompt: 'as myself in a joyful, celebratory moment, radiant and alive' },
 ];
+// V2 (song-chat test) fallback looks — used only if the AI idea call fails.
+// Deliberately golden-hour-free and framed as "a real moment of you living it,"
+// so even the fallback pushes toward a specific, photoreal vision (not a preset
+// mood). The AI-generated ideas (visionIdeas) are still preferred when present.
+const VISION_SCENE_DEFAULT_V2 = [
+  { e: '🌟', t: 'Me, living it right now', prompt: 'as myself fully immersed in the exact dream I described, present in the real moment, photoreal and cinematic, true-to-scene light' },
+  { e: '🏆', t: 'The me who made it', prompt: 'as the version of myself who has made this dream real, quietly proud and powerful, photoreal and cinematic' },
+  { e: '🎬', t: 'A still from my life', prompt: 'as myself in a candid, film-still moment of this dream, present and emotional, natural light that fits the scene' },
+];
 
 // Cycling status loaders — the waits should read as work happening.
 const SOUND_LOADING_LINES = [
@@ -679,10 +688,11 @@ export function V3_Chat({
     data.current.face = faces[0] ?? null;
     if (faces.length) pushUserPhotos(faces);
     setPhase('visionScene');
-    const who = faces.length > 1 ? `you and your ${faces.length - 1=== 1 ? 'person' : 'people'}` : 'you';
     botSay([
       faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's going to look incredible. ✨`,
-      `Now let's picture YOU in it, ${name}. Which version of you should we bring to life? (or tap "Describe my own" to say it your way)`,
+      variant === 'v2'
+        ? `Now — here's how I picture you living this, ${name}. 👇 Tap the one that hits you most (or describe your own).`
+        : `Now let's picture YOU in it, ${name}. Which version of you should we bring to life? (or tap "Describe my own" to say it your way)`,
     ], 'visionScene');
   };
   const skipPhoto = () => {
@@ -690,14 +700,27 @@ export function V3_Chat({
     data.current.faces = [];
     data.current.face = null;
     setPhase('visionScene');
-    botSay([`No worries — we can add it anytime.`, `Which version of you should we picture, ${name}? (or describe your own)`], 'visionScene');
+    botSay([
+      `No worries — we can add it anytime.`,
+      variant === 'v2'
+        ? `Here's how I picture you living this, ${name}. 👇 Tap the one that hits you most (or describe your own).`
+        : `Which version of you should we picture, ${name}? (or describe your own)`,
+    ], 'visionScene');
   };
 
   // ── Vision-scene (image look) chosen → pre-warm the image, move to sound ──
-  const visionSceneIdeas = () => visionIdeas ?? (VISION_SCENE_IDEAS[data.current.songAbout] || VISION_SCENE_DEFAULT);
+  // V2 presents AI-proposed visions as 2-3 striking options to pick from (the
+  // ideas are still AI-generated; only the picked one ever gets rendered, so it
+  // stays 1 image of cost). V1 keeps its original 4-look behavior.
+  const visionSceneIdeas = () => variant === 'v2'
+    ? (visionIdeas ?? VISION_SCENE_DEFAULT_V2).slice(0, 3)
+    : (visionIdeas ?? (VISION_SCENE_IDEAS[data.current.songAbout] || VISION_SCENE_DEFAULT));
   const chooseVisionScene = (idea: { t: string; prompt: string }) => {
     data.current.visionScene = idea.prompt;
     pushUser(idea.t);
+    // Which proposed vision they chose — split by chat_variant to see if the
+    // proactive v2 ideas land better than v1's look-picker.
+    capturePostHogEvent('vision_idea_picked', { flow: 'onboarding_comeback1', source: visionIdeas ? 'ai' : 'fallback' });
     // Pre-warm the vision now that we know the look + have the face(s).
     onPhoto(data.current.face, {
       songAbout: data.current.songAbout, scene: data.current.scene,
@@ -1121,6 +1144,7 @@ export function V3_Chat({
             onSave={handlePick}
             onMedia={scrollToEnd}
             web={web}
+            variant={variant}
           />
         )}
 
@@ -1514,13 +1538,16 @@ const SONG_WAIT_LINES = [
 ];
 
 function ChatReveal({
-  title, soundStyle, voice, visionUrl, visionState, songs, songState, statusLine, onSave, onMedia, web,
+  title, soundStyle, voice, visionUrl, visionState, songs, songState, statusLine, onSave, onMedia, web, variant = 'v1',
 }: {
   title: string; soundStyle: string; voice: string;
   visionUrl: string | null; visionState: SlotState;
   songs: GeneratedSong[]; songState: SlotState; statusLine: string;
   onSave?: (version?: number) => void; onMedia?: () => void; web?: boolean;
+  // V2 heroes the vision image — bigger, portrait, "future you" framing.
+  variant?: 'v1' | 'v2';
 }) {
+  const heroVision = variant === 'v2';
   const [playing, setPlaying] = useState<number | null>(null);
   // Cycle the wait-words while the song generates — visible motion in the
   // copy itself (the old audio-bars implied playback that wasn't happening).
@@ -1632,7 +1659,7 @@ function ChatReveal({
             transition={{ duration: 1.5, ease: 'easeOut' }}
           />
         )}
-        <div style={{ position: 'relative', zIndex: 1, borderRadius: 22, overflow: 'hidden', aspectRatio: '4 / 3', background: heroGradient, boxShadow: '0 18px 40px -20px rgba(58,42,34,0.6)', border: `1px solid ${LOVIFY.line}` }}>
+        <div style={{ position: 'relative', zIndex: 1, borderRadius: 22, overflow: 'hidden', aspectRatio: heroVision ? '3 / 4' : '4 / 3', background: heroGradient, boxShadow: heroVision ? '0 26px 60px -22px rgba(58,42,34,0.72)' : '0 18px 40px -20px rgba(58,42,34,0.6)', border: `1px solid ${LOVIFY.line}` }}>
           {visionUrl ? (
             web ? (
               <>
@@ -1658,6 +1685,17 @@ function ChatReveal({
                 ? <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>you, living it</span>
                 : <><RevealSpinner /><span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.95)', textShadow: '0 1px 6px rgba(0,0,0,0.3)' }}>Creating your vision…</span></>}
             </div>
+          )}
+          {/* V2: a "future you" caption scrim, so the hero image lands as an
+              identity moment ("this is the life you're stepping into"). */}
+          {heroVision && visionUrl && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.9 }}
+              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '34px 16px 14px', background: 'linear-gradient(to top, rgba(20,12,8,0.82), rgba(20,12,8,0.32) 55%, transparent)', display: 'flex', flexDirection: 'column', gap: 2, pointerEvents: 'none' }}
+            >
+              <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: 'rgba(255,221,180,0.95)' }}>This is future you</span>
+              <span style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: '#fff', textShadow: '0 2px 14px rgba(0,0,0,0.45)', lineHeight: 1.15 }}>Living it. ✨</span>
+            </motion.div>
           )}
         </div>
         {web && visionUrl && [
