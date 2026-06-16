@@ -756,11 +756,10 @@ export function V3_Chat({
         visionReq.then(setVisionIdeas).catch(() => { /* personalized fallback covers it */ });
       }
       if (variant === 'v2') {
-        // V2: one more question — a song they love — before lyrics, so it shapes
-        // both the lyric style and the sound. No skip: we want them to picture a
-        // sound. Then straight into lyrics.
-        setPhase('artist');
-        botSay([`What do you want your song to sound like? Name a song title or artist name that would fit perfectly with this and we'll remake your song in that style. 🎧`], 'text');
+        // V2: the photo is an ACTION, not another text question — it breaks the
+        // rhythm after the 3 dream questions, before the sound question + lyrics.
+        setPhase('photo');
+        botSay([`Amazing! Now, add your photo so we can create a vision of you living this dream 📸`], 'photo');
       } else {
         setPhase('photo');
         botSay([
@@ -785,24 +784,37 @@ export function V3_Chat({
     data.current.faces = faces;
     data.current.face = faces[0] ?? null;
     if (faces.length) pushUserPhotos(faces);
+    if (variant === 'v2') {
+      // V2: photo done → the sound question (the artist reference).
+      setPhase('artist');
+      botSay([
+        faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's going to look incredible. ✨`,
+        `Now — what do you want your song to sound like? Name a song title or artist name that would fit perfectly with this and we'll remake your song in that style. 🎧`,
+      ], 'text');
+      return;
+    }
     setPhase('visionScene');
     botSay([
       faces.length > 1 ? `Love it — all ${faces.length} of you. ✨` : `Perfect. That's going to look incredible. ✨`,
-      variant === 'v2'
-        ? `Now — what scene should we picture you in to showcase this dream? 👇 Tap one of my ideas, or describe your own.`
-        : `Now let's picture YOU in it, ${name}. Which version of you should we bring to life? (or tap "Describe my own" to say it your way)`,
+      `Now let's picture YOU in it, ${name}. Which version of you should we bring to life? (or tap "Describe my own" to say it your way)`,
     ], 'visionScene');
   };
   const skipPhoto = () => {
     pushUser('Maybe later');
     data.current.faces = [];
     data.current.face = null;
+    if (variant === 'v2') {
+      setPhase('artist');
+      botSay([
+        `No worries — we can add it anytime.`,
+        `Now — what do you want your song to sound like? Name a song title or artist name that would fit perfectly with this and we'll remake your song in that style. 🎧`,
+      ], 'text');
+      return;
+    }
     setPhase('visionScene');
     botSay([
       `No worries — we can add it anytime.`,
-      variant === 'v2'
-        ? `What scene should we picture to showcase this dream, ${name}? 👇 Tap one of my ideas, or describe your own.`
-        : `Which version of you should we picture, ${name}? (or describe your own)`,
+      `Which version of you should we picture, ${name}? (or describe your own)`,
     ], 'visionScene');
   };
 
@@ -850,10 +862,10 @@ export function V3_Chat({
     });
     afterVision();
   };
-  // After the vision look: V2 skips the genre step when an artist reference
-  // already set the sound; otherwise we ask which sound feels right.
+  // After the vision look: V2 has no genre step (the sound came from the artist
+  // reference), so go straight to the voice pick. V1 still asks for the sound.
   const afterVision = () => {
-    if (variant === 'v2' && data.current.artistBrief?.styleDescription) {
+    if (variant === 'v2') {
       setPhase('voice');
       botSay([`Beautiful — that's going to look incredible. 🎨`, `Last thing: who should sing it?`], 'voice');
     } else {
@@ -1055,14 +1067,12 @@ export function V3_Chat({
     const d = data.current;
     d.lyrics = lyricsDraft.trim() || d.lyrics;
     if (variant === 'v2') {
-      // V2: lyrics come BEFORE the visual + sound. Move on to the photo/vision,
-      // then genre + voice, then make the song.
+      // V2: photo + sound are already done — now pick the vision scene, then voice.
       pushUser('Love it — let’s keep going 🎶');
-      setPhase('photo');
+      setPhase('visionScene');
       botSay([
-        `Perfect. Now let's create a vision of you to go with this song. ✨`,
-        `Upload a photo of yourself and we'll picture you living this dream 📸`,
-      ], 'photo');
+        `Perfect. Now — what scene should we picture you in to bring this dream to life? 👇 Tap one of my ideas, or describe your own.`,
+      ], 'visionScene');
       return;
     }
     pushUser('Make my song 🎶');
