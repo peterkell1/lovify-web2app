@@ -659,10 +659,9 @@ export function V3_Chat({
       data.current.songAbout = 'My dream life'; // one journey — no topic picker
       setPhase('detail');
       if (variant === 'v2') {
-        // V2: straight into Q1 (the intro already framed it) — no extra preamble.
+        // V2: one magical, specific question — greets them by name, dives right in.
         botSay([
-          `Perfect, ${fn}. 🙌`,
-          `Tell me about the life you really want — or what's weighing on you right now. Just say it however it comes out.`,
+          `Tell me, ${fn} — if you could wave a magic wand and create the most amazing life you can imagine… what would you wish for, and what problems in your life would you make disappear? Be specific. ✨`,
         ], 'text');
       } else {
         botSay([
@@ -683,7 +682,7 @@ export function V3_Chat({
         // background so the "Help me imagine" chips are ready if they want them.
         suggestFlippedDreams(value).then((r) => setFlipIdeas(r.ideas)).catch(() => { /* static set covers it */ });
         botSay([
-          `Now picture one perfect moment in that life. Where are you — and who's with you?`,
+          `Now close your eyes and picture that life. How would you describe the best version of yourself in it? Where are you? Who's with you? Be specific.`,
         ], 'text');
       } else {
         const req = suggestFlippedDreams(value)
@@ -706,7 +705,7 @@ export function V3_Chat({
       setPhase('why');
       if (variant === 'v2') {
         // V2: straight to Q3, no "I can SEE it" filler bubble.
-        botSay([`Last one — why does this matter so much to you, ${name}?`], 'text');
+        botSay([`Why does that mean so much to you?`], 'text');
       } else {
         botSay([
           `I can SEE it. 🌟`,
