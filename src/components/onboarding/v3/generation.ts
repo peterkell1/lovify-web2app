@@ -413,6 +413,21 @@ export interface GeneratedSong {
   streaming?: boolean;
 }
 
+/** Suno rejects very long style strings. The V2 artist blueprint can be ~1000
+ *  chars of comma-separated tags (front-loaded with the most distinctive ones),
+ *  so trim to a safe length, cutting at a tag boundary so we never send a
+ *  half-word. v1 styles are short and pass through untouched. */
+function capStyle(s: string): string {
+  const t = (s || '').trim();
+  const MAX = 200;
+  if (t.length <= MAX) return t;
+  const cut = t.slice(0, MAX);
+  const lastComma = cut.lastIndexOf(',');
+  const lastSemi = cut.lastIndexOf(';');
+  const boundary = Math.max(lastComma, lastSemi);
+  return (boundary > 80 ? cut.slice(0, boundary) : cut).trim();
+}
+
 export async function startSong(req: {
   lyrics: string; title: string; style: string; voice: string; model?: string;
 }): Promise<string> {
@@ -423,7 +438,7 @@ export async function startSong(req: {
   const res = await authedFetch('generate-song-router', {
     lyrics: req.lyrics,
     title: req.title,
-    style: req.style,
+    style: capStyle(req.style),
     vocalGender,
     ...(req.model ? { model: req.model } : {}),
   });
