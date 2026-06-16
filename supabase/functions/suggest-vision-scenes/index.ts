@@ -33,10 +33,13 @@ async function callClaude(system: string, user: string, maxTokens: number): Prom
       messages: [{ role: 'user', content: `${system}\n\n---\n\n${user}` }],
     }),
   });
-  if (!res.ok) throw new Error(`kie claude ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  const blocks = Array.isArray(data?.content) ? data.content : [];
-  return blocks.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`kie ${res.status}: ${raw.slice(0, 500)}`);
+  let data: any;
+  try { data = JSON.parse(raw); } catch { throw new Error(`kie non-JSON: ${raw.slice(0, 500)}`); }
+  const content = data?.content || data?.data?.content || data?.message?.content || data?.result?.content;
+  if (!Array.isArray(content)) throw new Error(`kie unexpected shape: ${JSON.stringify(data).slice(0, 500)}`);
+  return content.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
 }
 
 function extractJson(text: string): Record<string, unknown> {

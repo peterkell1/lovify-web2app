@@ -39,10 +39,14 @@ async function callClaude(system: string, user: string, maxTokens: number): Prom
       messages: [{ role: 'user', content: `${system}\n\n---\n\n${user}` }],
     }),
   });
-  if (!res.ok) throw new Error(`kie claude ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  const blocks = Array.isArray(data?.content) ? data.content : [];
-  return blocks.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`kie ${res.status}: ${raw.slice(0, 500)}`);
+  let data: any;
+  try { data = JSON.parse(raw); } catch { throw new Error(`kie non-JSON: ${raw.slice(0, 500)}`); }
+  // Accept the raw Anthropic shape OR a Kie-wrapped one ({data:{content}}, etc.).
+  const content = data?.content || data?.data?.content || data?.message?.content || data?.result?.content;
+  if (!Array.isArray(content)) throw new Error(`kie unexpected shape: ${JSON.stringify(data).slice(0, 500)}`);
+  return content.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
 }
 
 // Claude returns prose-wrapped or fenced JSON sometimes — extract the object.
@@ -100,9 +104,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   try {
-    const { artistOrSong = '' } = await req.json();
-    if (!String(artistOrSong).trim()) return json({ error: 'missing artistOrSong' }, 400);
-    const text = await callClaude(SYSTEM, userMsg(String(artistOrSong).trim()), 2000);
+    let body: any = {};
+    try { body = await req.json(); } catch { body = {}; }
+    const artistOrSong = String(body?.artistOrSong || '').trim();
+    if (!artistOrSong) return json({ error: 'missing artistOrSong' }, 400);
+    const text = await callClaude(SYSTEM, userMsg(artistOrSong), 2000);
     return json(extractJson(text));
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);
