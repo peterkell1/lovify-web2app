@@ -4331,6 +4331,82 @@ interface AuthProps extends NavProps {
   onContinueWithEmail?: () => void;
 }
 
+// ─── "Save your progress" account gate (CalAI-style) ───────────────
+// Shown right after the song is created, BEFORE the paywall: create an account
+// (Apple / Google) to lock in identity at peak intent, or Skip to the paywall.
+// OAuth bounces the page; the flow routes the return back to the paywall step.
+export function V3_SaveProgress({ onApple, onGoogle, onSkip, onBack }: {
+  onApple?: () => Promise<{ error?: Error }>;
+  onGoogle?: () => Promise<{ error?: Error }>;
+  onSkip?: () => void;
+  onBack?: () => void;
+}) {
+  const [busy, setBusy] = useState<null | 'apple' | 'google'>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (which: 'apple' | 'google', fn?: () => Promise<{ error?: Error }>) => {
+    if (busy || !fn) return;
+    setError(null); setBusy(which);
+    const { error: err } = await fn();
+    // Web OAuth redirects away on success, so we only get here on error.
+    setBusy(null);
+    if (err) setError(err.message);
+  };
+  const oauthBtn: CSSProperties = {
+    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+    padding: '16px 18px', borderRadius: 999, fontFamily: SANS, fontSize: 16, fontWeight: 700,
+    cursor: busy ? 'default' : 'pointer',
+  };
+  return (
+    <LovScreen>
+      <LovBack onClick={onBack} />
+      <LovHeading
+        title="Save your progress"
+        align="left"
+        titleStyle={{ fontSize: 30, textAlign: 'left' }}
+      />
+      <div style={{ flex: 1 }} />
+      {error && (
+        <p style={{ margin: '0 24px 10px', fontFamily: SANS, fontSize: 13.5, color: '#C0392B', textAlign: 'center' }}>{error}</p>
+      )}
+      <div style={{ padding: '0 22px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <button
+          onClick={() => run('apple', onApple)}
+          disabled={busy !== null}
+          style={{ ...oauthBtn, border: 'none', background: '#000', color: '#fff', opacity: busy && busy !== 'apple' ? 0.5 : 1 }}
+        >
+          <svg width="17" height="17" viewBox="0 0 17 17" fill="#fff" aria-hidden>
+            <path d="M13.7 12.4c-.25.57-.54 1.1-.88 1.58-.46.66-.84 1.12-1.13 1.37-.45.42-.93.63-1.45.65-.37 0-.82-.11-1.34-.32-.52-.21-1-.32-1.44-.32-.46 0-.95.11-1.48.32-.53.22-.96.33-1.28.34-.5.02-.99-.2-1.47-.66-.31-.28-.71-.75-1.19-1.43C1.04 13.13.6 12.2.27 11.13-.08 9.98-.25 8.87-.25 7.79c0-1.23.27-2.3.8-3.18.42-.71.98-1.27 1.68-1.68.7-.41 1.46-.62 2.27-.64.39 0 .9.12 1.54.36.64.24 1.05.36 1.23.36.13 0 .59-.14 1.36-.42.73-.26 1.35-.37 1.85-.33 1.37.11 2.4.65 3.08 1.62-1.22.74-1.83 1.78-1.82 3.11.01 1.04.39 1.9 1.13 2.59.34.32.71.57 1.13.74-.09.26-.19.52-.3.76zM10.6.32c0 .92-.34 1.78-1.01 2.57-.81.94-1.79 1.48-2.85 1.4-.01-.11-.02-.23-.02-.35 0-.88.39-1.83 1.07-2.6.34-.39.78-.71 1.3-.97.52-.25 1.02-.39 1.49-.42.01.12.02.25.02.37z"/>
+          </svg>
+          {busy === 'apple' ? 'Signing in…' : 'Sign in with Apple'}
+        </button>
+        <button
+          onClick={() => run('google', onGoogle)}
+          disabled={busy !== null}
+          style={{ ...oauthBtn, background: '#fff', color: LOVIFY.ink, border: `1.5px solid ${LOVIFY.line}`, opacity: busy && busy !== 'google' ? 0.5 : 1 }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+          </svg>
+          {busy === 'google' ? 'Signing in…' : 'Sign in with Google'}
+        </button>
+      </div>
+      <div style={{ padding: '0 22px 30px', textAlign: 'center' }}>
+        <span style={{ fontFamily: SANS, fontSize: 14, color: LOVIFY.sub }}>Would you like to sign in later? </span>
+        <button
+          onClick={() => { if (!busy) onSkip?.(); }}
+          disabled={busy !== null}
+          style={{ background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', fontFamily: SANS, fontSize: 14, fontWeight: 700, color: LOVIFY.ink, textDecoration: 'underline', textUnderlineOffset: 2, padding: 0 }}
+        >
+          Skip
+        </button>
+      </div>
+    </LovScreen>
+  );
+}
+
 export function V3_CreateAccount({ onNext, onBack, onApple, onEmailSignup, onEmailLogin, onContinueWithEmail }: AuthProps) {
   // null = show the Apple/email choice; 'email' = the inline email form.
   const [view, setView] = useState<'choice' | 'email'>('choice');

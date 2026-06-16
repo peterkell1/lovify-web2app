@@ -19,7 +19,7 @@ import {
   V3_MakeSong,
   V3_22_Trial, V3_TrialOffer, V3_TrialReminder, V3_TrialPrice, V3_23_Paywall,
   V3_OrderAnnual99,
-  V3_CreateAccount,
+  V3_CreateAccount, V3_SaveProgress,
   ONBOARDING_PRELOAD_IMAGES,
 } from './screens';
 import { V3_Chat, type ChatPersist } from './OnboardingChat';
@@ -95,7 +95,7 @@ const WEB_STEP_IDS_ANNUAL99 = [
   'hook_imagine_drug', 'reveal_music', 'discovery', 'science', 'goals',
   'lovify_helps', 'promise', 'founder_story', 'referral', 'familiarity',
   'proof_music_negative', 'proof_more_depressed', 'the_turn',
-  'genres', 'make_first_song', 'song_chat', 'order_annual99', 'create_account',
+  'genres', 'make_first_song', 'song_chat', 'save_account', 'order_annual99', 'create_account',
 ] as const;
 
 type GenSlot = 'idle' | 'working' | 'done' | 'failed';
@@ -286,7 +286,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
   }, [sound]);
 
   const _router = useRouter(); const navigate = (to: string) => _router.push(to);
-  const { signInWithApple, signUpWithEmail, signInWithEmail } = useAuth();
+  const { signInWithApple, signInWithGoogle, signUpWithEmail, signInWithEmail } = useAuth();
 
   // ── PostHog funnel instrumentation ──
   // Fire flow_started once, then step_viewed on every screen so PostHog can
@@ -727,6 +727,27 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       // ($17.99/mo = existing 'monthly'; $89.99/yr up front = 'annual99').
       // Plan picker. Email was already captured at the gate (before generation);
       // reuse it for checkout + the "Saving to <email>" confirmation.
+      // Account gate BEFORE the paywall (CalAI "Save your progress" style):
+      // create an account at peak intent, then go to checkout. Web OAuth bounces
+      // the page, so we route the return through the /offer?at=order_annual99
+      // deep-link — back to the paywall step, now signed in. The onboarding
+      // session id persists in localStorage across the bounce, so the eventual
+      // purchase still claims the staged song. Skip → straight to the paywall.
+      // DEV: see PR notes — needs Google provider enabled in Supabase, /offer
+      // whitelisted as a redirect URL, and a check that the song card rehydrates
+      // on return (in-memory song state is lost across the OAuth redirect).
+      case 'save_account': return <V3_SaveProgress
+        onBack={back}
+        onApple={() => {
+          capturePostHogEvent('account_gate_oauth', { flow: 'onboarding_comeback1', funnel: offer || 'standard', provider: 'apple' });
+          return signInWithApple('/offer?at=order_annual99');
+        }}
+        onGoogle={() => {
+          capturePostHogEvent('account_gate_oauth', { flow: 'onboarding_comeback1', funnel: offer || 'standard', provider: 'google' });
+          return signInWithGoogle('/offer?at=order_annual99');
+        }}
+        onSkip={() => { capturePostHogEvent('account_gate_skipped', { flow: 'onboarding_comeback1', funnel: offer || 'standard' }); next(); }}
+      />;
       case 'order_annual99': return <V3_OrderAnnual99
         onBack={back}
         email={offerEmailRef.current}
