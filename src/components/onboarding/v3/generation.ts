@@ -60,6 +60,30 @@ export async function sendSongEmail(req: { email: string; title: string; songUrl
   }
 }
 
+// ─── 0. Voice transcription (server-side) ───────────────────────
+// The on-device SpeechRecognition mic is unavailable in most in-app webviews
+// (iOS Instagram/Facebook), which is where the ad traffic lives — so the V2
+// voice-first capture records audio (MediaRecorder) and sends it here instead.
+// We post the clip as a base64 data URL (same shape as the vision face photo)
+// so it rides the existing authedFetch path; the `transcribe-audio` edge fn
+// decodes it and forwards to the speech-to-text provider (e.g. Whisper),
+// returning { text }.
+export async function transcribeAudio(audio: Blob): Promise<string> {
+  // Read the recorded blob to a base64 data URL for JSON transport.
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ''));
+    fr.onerror = () => reject(new Error('audio read failed'));
+    fr.readAsDataURL(audio);
+  });
+  const res = await authedFetch('transcribe-audio', { audio: dataUrl, mimeType: audio.type || 'audio/webm' });
+  if (!res.ok) throw new Error(`transcribe-audio failed (${res.status})`);
+  const data = await res.json();
+  const text = String(data?.text || data?.transcript || '').trim();
+  if (!text) throw new Error('empty transcript');
+  return text;
+}
+
 // ─── 1. Sound styles ────────────────────────────────────────────
 // suggest-song-styles ← { conversationContext, previouslySuggestedVibes?, regenerateCount? }
 //                     → { vibes: [{ name, description, genre, emoji }], source }

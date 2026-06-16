@@ -23,6 +23,7 @@ import {
   suggestSoundStyles, buildStyleContext, generateLyrics, type SoundVibe,
 } from '@/components/onboarding/v3/generation';
 import type { GeneratedSong } from '@/components/onboarding/v3/generation';
+import { VoiceDump } from './VoiceDump';
 import { publicEnv } from '@/lib/env';
 
 type SlotState = 'idle' | 'working' | 'done' | 'failed';
@@ -1045,6 +1046,23 @@ export function V3_Chat({
         {(revealed ? msgs.slice(0, revealIndexRef.current ?? msgs.length) : msgs).map((m) => (
           <Bubble key={m.id} msg={m} />
         ))}
+
+        {/* V2 voice-first: on the three "tell me about your dream" steps, lead
+            with a big tap-to-talk recorder (server transcription, so it works in
+            the in-app webviews where the on-device mic doesn't). It appends to
+            the draft; the chips below + typing remain as fallbacks. */}
+        {variant === 'v2' && mode === 'text' && (phase === 'detail' || phase === 'scene' || phase === 'why') && (
+          <VoiceDump
+            onStart={onMuteSound}
+            onText={(t) => setDraft((d) => (d.trim() ? d.trim() + ' ' : '') + t)}
+            onUsed={() => capturePostHogEvent('voice_dump_used', { flow: 'onboarding_comeback1', step: phase })}
+            label={phase === 'detail'
+              ? 'Tap to talk — describe your dream life'
+              : phase === 'why'
+                ? 'Tap to talk — say why it matters'
+                : 'Tap to talk — paint the scene'}
+          />
+        )}
 
         {/* "Help me imagine" lives right under the AI's question — a gentle hand
             for anyone who's stuck or low. Left-aligned like a bot affordance so
