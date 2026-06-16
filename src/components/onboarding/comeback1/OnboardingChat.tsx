@@ -921,17 +921,22 @@ export function V3_Chat({
             aid for iterating on the conversation. */}
         {web && (
           <div style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button
-              onClick={resetChat}
-              aria-label="Reset chat"
-              title="Reset chat"
-              style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 17, cursor: 'pointer', padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" stroke={LOVIFY.ink} strokeWidth="1.9" strokeLinecap="round" fill="none" />
-                <path d="M3 4.5V9h4.5" stroke={LOVIFY.ink} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
-            </button>
+            {/* Reset is a DEV-ONLY iteration aid (replays the chat from scratch).
+                Hidden for real users — people were tapping it and wiping their
+                run by accident. Shows only on localhost. */}
+            {typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname) && (
+              <button
+                onClick={resetChat}
+                aria-label="Reset chat"
+                title="Reset chat"
+                style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 17, cursor: 'pointer', padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" stroke={LOVIFY.ink} strokeWidth="1.9" strokeLinecap="round" fill="none" />
+                  <path d="M3 4.5V9h4.5" stroke={LOVIFY.ink} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              </button>
+            )}
             {onToggleSound && (
               <button
                 onClick={onToggleSound}
@@ -1509,6 +1514,9 @@ function ChatReveal({
   const [playedAny, setPlayedAny] = useState(false);
   // One <audio> per version so each card plays its OWN take (two distinct songs).
   const audioRefs = useRef<(HTMLAudioElement | null)[]>([]);
+  // The version the user most recently played — the one a single "Continue"
+  // saves (defaults to 0 if they continue without playing either).
+  const lastPlayedRef = useRef(0);
   // True while a tapped track is mid-buffer, so the row shows feedback instead
   // of looking frozen during the first few seconds of streaming.
   const [buffering, setBuffering] = useState<number | null>(null);
@@ -1559,6 +1567,7 @@ function ChatReveal({
     // once via load() if refused.
     setPlaying(n);
     setPlayedAny(true);
+    lastPlayedRef.current = n;
     const p = a.play();
     if (p && typeof p.catch === 'function') {
       p.catch(() => {
@@ -1655,7 +1664,6 @@ function ChatReveal({
         // Web: draw attention to play until a version is played, THEN move the
         // pulse to Save so the listen → save path is obvious.
         const pulse = !!web && ready && !playedAny && !on;
-        const savePulse = !!web && ready && playedAny;
         return (
           <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: 'rgba(255,251,244,0.97)', border: `1px solid ${LOVIFY.line}`, boxShadow: '0 10px 24px -16px rgba(58,42,34,0.5)' }}>
             <div style={{ position: 'relative', width: 48, height: 48, flexShrink: 0 }}>
@@ -1686,20 +1694,23 @@ function ChatReveal({
                   : <RevealWave />)
                 : <div style={{ fontFamily: SANS, fontSize: 12.5, color: LOVIFY.sub, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{thisWorking ? 'Producing your song…' : `${styleLabel} · ${voiceLabel}`}</div>}
             </div>
-            {/* Once a song is ready AND they've listened, pulse Save so it's
-                obvious that saving is the next step (this is how they keep it). */}
-            <motion.button
-              onClick={() => onSave?.(n)}
-              disabled={!ready}
-              animate={savePulse ? { scale: [1, 1.06, 1] } : { scale: 1 }}
-              transition={{ duration: 1.4, repeat: savePulse ? Infinity : 0, ease: 'easeInOut' }}
-              style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 999, border: 'none', cursor: ready ? 'pointer' : 'default', background: ready ? LOVIFY.orangeGradient : 'rgba(166,109,56,0.18)', color: ready ? '#fff' : LOVIFY.subSoft, fontFamily: SANS, fontSize: 13.5, fontWeight: 800, boxShadow: savePulse ? '0 0 0 3px rgba(216,92,28,0.22), 0 8px 18px -6px rgba(216,92,28,0.6)' : 'none' }}
-            >
-              Save
-            </motion.button>
           </div>
         );
       })}
+
+      {/* One prominent Continue instead of a small per-song Save — people were
+          skipping the Save chips. Continue keeps the version they last played
+          (defaults to Version 1) and moves them forward, same path Save took. */}
+      {songReady && (
+        <motion.button
+          onClick={() => onSave?.(lastPlayedRef.current)}
+          animate={playedAny ? { scale: [1, 1.03, 1] } : { scale: 1 }}
+          transition={{ duration: 1.5, repeat: playedAny ? Infinity : 0, ease: 'easeInOut' }}
+          style={{ marginTop: 4, width: '100%', padding: '16px', borderRadius: 999, border: 'none', cursor: 'pointer', background: LOVIFY.orangeGradient, color: '#fff', fontFamily: SANS, fontSize: 16.5, fontWeight: 800, boxShadow: '0 12px 26px -12px rgba(216,92,28,0.6)' }}
+        >
+          Continue
+        </motion.button>
+      )}
 
       {/* One <audio> per version, bound to its own take's URL. */}
       {[0, 1].map((n) => songs[n]?.audio_url ? (
@@ -1717,7 +1728,7 @@ function ChatReveal({
 
       <div style={{ textAlign: 'center', padding: '2px 8px 0', minHeight: 18 }}>
         <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub }}>
-          {songFailed ? '' : songWorking ? 'Hang tight — building your vision + song…' : 'Tap play to listen, then Save the one you love'}
+          {songFailed ? '' : songWorking ? 'Hang tight — building your vision + song…' : 'Tap play to hear each version, then Continue'}
         </span>
       </div>
     </motion.div>
