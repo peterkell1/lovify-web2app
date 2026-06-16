@@ -45,6 +45,21 @@ import { buildRcCheckoutUrl } from '@/lib/rcCheckout';
 import { rcWebPurchase, rcWebBillingConfigured, prewarmRcWebBilling } from '@/lib/rcWebPurchase';
 import { initMetaPixel, trackPixel } from '@/lib/metaPixel';
 
+// In-app webviews (Instagram / Facebook / TikTok in-app browsers) throttle or
+// freeze requestAnimationFrame, which STALLS Framer Motion enter animations and
+// leaves each new screen stuck at opacity 0 — a blank page with only the
+// (non-animated) sound toggle visible. The Instagram in-app browser is exactly
+// where paid ad traffic lands, so detect these (and reduced-motion users) and
+// render screens STATICALLY: visible by default, with no enter/exit animation
+// that can stall. Normal browsers keep the slide.
+const ANIMATE_SCREENS = (() => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
+  const ua = navigator.userAgent || '';
+  const inAppWebview = /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|MicroMessenger|TikTok|musical_ly|Snapchat|Pinterest|Twitter/i.test(ua);
+  const reducedMotion = !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return !inAppWebview && !reducedMotion;
+})();
+
 // Funnel step ids (one per screen, in flow order) so PostHog can show
 // drop-off per screen. Keep in sync with the switch() below. This is the
 // FULL iOS-app flow (31 screens). The web funnel (/start) renders a trimmed
@@ -861,23 +876,34 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
           />
         )}
 
-        <AnimatePresence initial={false} custom={dir} mode="popLayout">
-          <motion.div
-            key={step}
-            custom={dir}
-            initial={{ opacity: 0, x: dir * 48 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: dir * -48 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            style={{ position: 'absolute', inset: 0 }}
-          >
-            {/* Web funnel: nudge headlines ~10% larger for phone readability.
-                App stays at scale 1 (unchanged). */}
+        {ANIMATE_SCREENS ? (
+          <AnimatePresence initial={false} custom={dir} mode="popLayout">
+            <motion.div
+              key={step}
+              custom={dir}
+              initial={{ opacity: 0, x: dir * 48 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: dir * -48 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ position: 'absolute', inset: 0 }}
+            >
+              {/* Web funnel: nudge headlines ~10% larger for phone readability.
+                  App stays at scale 1 (unchanged). */}
+              <HeadingScaleContext.Provider value={mode === 'web' ? 1.1 : 1}>
+                {screen}
+              </HeadingScaleContext.Provider>
+            </motion.div>
+          </AnimatePresence>
+        ) : (
+          // In-app webview / reduced-motion: NO enter/exit animation, so the
+          // screen is visible by default instead of stuck at opacity 0 (the
+          // Instagram blank-screen bug). Plain swap keyed by step.
+          <div key={step} style={{ position: 'absolute', inset: 0 }}>
             <HeadingScaleContext.Provider value={mode === 'web' ? 1.1 : 1}>
               {screen}
             </HeadingScaleContext.Provider>
-          </motion.div>
-        </AnimatePresence>
+          </div>
+        )}
 
         {/* Persistent music toggle — top-right on every screen after the
             landing (the landing renders its own toggle in the same spot). On the
