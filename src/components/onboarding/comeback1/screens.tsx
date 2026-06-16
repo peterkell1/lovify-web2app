@@ -2204,7 +2204,7 @@ export function V3_04_Story({ onNext, onBack }: NavProps) {
           My therapist asked me, <span style={{ fontStyle: 'italic' }}><LovAccent>“What makes you happy?”</LovAccent></span> But the truth was I couldn't even remember what happiness felt like.
         </p>
         <p style={{ margin: '14px 0 0', fontFamily: SANS, fontSize: 15, fontStyle: 'italic', lineHeight: 1.55, color: LOVIFY.inkSoft, letterSpacing: 0.05 }}>
-          So I started focusing on falling in love with life again, and turned to positive music to feel better. Eight months later, my whole body healed and my life changed. <span style={{ fontStyle: 'italic' }}><LovAccent>That's why I created Lovify.</LovAccent></span>
+          So I started focusing on falling in love with life again, and turned to positive music to feel better. Ten months later, my whole body healed and my life changed. <span style={{ fontStyle: 'italic' }}><LovAccent>That's why I created Lovify.</LovAccent></span>
         </p>
         <p style={{ margin: '14px 0 0', fontFamily: SANS, fontSize: 15, fontStyle: 'italic', lineHeight: 1.55, color: LOVIFY.inkSoft, letterSpacing: 0.05 }}>
           To help you fall back in love with life, too.”

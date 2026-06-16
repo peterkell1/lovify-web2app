@@ -512,12 +512,10 @@ export function V3_Chat({
     { say: [`Even help you create a life you truly love?`], reply: 'Yes 🙌' },
   ];
   const handlePick = (n?: number) => {
-    if (ladderIdx >= 0) return; // already in the bridge — ignore extra Save taps
-    pickedRef.current = typeof n === 'number' ? n : 0;
-    pushUser('Saved! ❤️');
-    capturePostHogEvent('value_bridge_shown', { flow: 'onboarding_comeback1' });
-    setLadderIdx(0);
-    botSay(LADDER[0].say, 'ladder');
+    // Go straight to the paywall while the emotion is highest — no yes-ladder.
+    // (The ladder code below stays dormant; it just never starts.)
+    capturePostHogEvent('song_saved', { flow: 'onboarding_comeback1' });
+    onSave?.(typeof n === 'number' ? n : 0);
   };
   const answerLadder = () => {
     const i = ladderIdx;
@@ -1708,7 +1706,7 @@ function ChatReveal({
           transition={{ duration: 1.5, repeat: playedAny ? Infinity : 0, ease: 'easeInOut' }}
           style={{ marginTop: 4, width: '100%', padding: '16px', borderRadius: 999, border: 'none', cursor: 'pointer', background: LOVIFY.orangeGradient, color: '#fff', fontFamily: SANS, fontSize: 16.5, fontWeight: 800, boxShadow: '0 12px 26px -12px rgba(216,92,28,0.6)' }}
         >
-          Continue
+          Save song
         </motion.button>
       )}
 
@@ -1728,7 +1726,7 @@ function ChatReveal({
 
       <div style={{ textAlign: 'center', padding: '2px 8px 0', minHeight: 18 }}>
         <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: LOVIFY.sub }}>
-          {songFailed ? '' : songWorking ? 'Hang tight — building your vision + song…' : 'Tap play to hear each version, then Continue'}
+          {songFailed ? '' : songWorking ? 'Hang tight — building your vision + song…' : 'Tap play to hear each version, then Save song'}
         </span>
       </div>
     </motion.div>
