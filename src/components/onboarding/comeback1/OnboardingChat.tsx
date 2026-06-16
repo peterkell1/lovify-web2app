@@ -661,7 +661,7 @@ export function V3_Chat({
       if (variant === 'v2') {
         // V2: one magical, specific question — greets them by name, dives right in.
         botSay([
-          `Tell me, ${fn} — if you could wave a magic wand and create the most amazing life you can imagine… what would you wish for, and what problems in your life would you make disappear? Be specific. ✨`,
+          `Tell me, ${fn}, if you could wave a magic wand and create the most amazing life you can imagine… what would you wish for yourself in that life? What problems would no longer exist? Be specific. ✨`,
         ], 'text');
       } else {
         botSay([
