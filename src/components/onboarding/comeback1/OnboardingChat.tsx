@@ -32,6 +32,14 @@ type Phase =
   | 'photo' | 'visionScene' | 'sound' | 'voice'
   | 'writing' | 'lyricsReview' | 'email' | 'generating';
 
+// Ordered phases — used to stamp a step index on the per-question analytics
+// event below, so PostHog can build a question-by-question funnel inside the
+// song chat (previously the whole chat was one opaque 'song_chat' step).
+const PHASE_ORDER: Phase[] = [
+  'name', 'detail', 'scene', 'why', 'photo', 'visionScene',
+  'sound', 'voice', 'writing', 'lyricsReview', 'email', 'generating',
+];
+
 type InputMode =
   | 'busy' | 'text' | 'photo' | 'visionScene' | 'visionText'
   | 'soundLoading' | 'sound' | 'voice' | 'writing' | 'lyricsReview' | 'email'
@@ -343,6 +351,16 @@ export function V3_Chat({
   const [msgs, setMsgs] = useState<ChatMsg[]>(() => persisted?.msgs ?? []);
   const [phase, setPhase] = useState<Phase>(() => persisted?.phase ?? 'name');
   const [mode, setMode] = useState<InputMode>(() => persisted?.mode ?? 'busy');
+  // Per-question analytics: fire a step event each time the chat reaches a new
+  // phase, so PostHog shows exactly WHICH question people drop on. Carries the
+  // funnel super-property, so /offer is isolatable.
+  useEffect(() => {
+    capturePostHogEvent('song_chat_step', {
+      flow: 'onboarding_comeback1',
+      phase,
+      step_index: PHASE_ORDER.indexOf(phase),
+    });
+  }, [phase]);
   const [draft, setDraft] = useState('');
   const [showIdeas, setShowIdeas] = useState(false);
   // Web "Help me imagine" is multi-select: tap several short ideas, then Continue.
