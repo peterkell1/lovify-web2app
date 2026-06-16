@@ -8,12 +8,13 @@
 // Returns JSON: { styleDescription, lyricalFormula, structuralDynamics,
 //                 styleSpecificTraps[] }  OR  { notFound, suggestion }.
 //
-// Runs on Claude Sonnet via Kie.ai (same provider as the Suno song generation).
+// Runs on Claude Sonnet via the Anthropic API directly.
 // DEPLOY:
 //   supabase functions deploy describe-artist-sound --no-verify-jwt
-//   supabase secrets set KIE_AI_API_KEY=...
+//   supabase secrets set ANTHROPIC_API_KEY=...   (likely already set for the app)
 
-const KIE_MODEL = 'claude-sonnet-4-5';
+// If your account uses a different Sonnet id, change this one line.
+const MODEL = 'claude-sonnet-4-6';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -23,29 +24,30 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-// Call Claude Sonnet on Kie.ai (Anthropic Messages format). The documented
-// schema doesn't expose a separate `system` field, so we fold the system
-// instructions into the user message for guaranteed compatibility.
+// Call Claude Sonnet on the Anthropic Messages API directly.
 async function callClaude(system: string, user: string, maxTokens: number): Promise<string> {
-  const key = Deno.env.get('KIE_AI_API_KEY');
-  if (!key) throw new Error('KIE_AI_API_KEY not set');
-  const res = await fetch('https://api.kie.ai/claude/v1/messages', {
+  const key = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
     body: JSON.stringify({
-      model: KIE_MODEL,
+      model: MODEL,
       max_tokens: maxTokens,
-      stream: false,
-      messages: [{ role: 'user', content: `${system}\n\n---\n\n${user}` }],
+      system,
+      messages: [{ role: 'user', content: user }],
     }),
   });
   const raw = await res.text();
-  if (!res.ok) throw new Error(`kie ${res.status}: ${raw.slice(0, 500)}`);
+  if (!res.ok) throw new Error(`anthropic ${res.status}: ${raw.slice(0, 500)}`);
   let data: any;
-  try { data = JSON.parse(raw); } catch { throw new Error(`kie non-JSON: ${raw.slice(0, 500)}`); }
-  // Accept the raw Anthropic shape OR a Kie-wrapped one ({data:{content}}, etc.).
-  const content = data?.content || data?.data?.content || data?.message?.content || data?.result?.content;
-  if (!Array.isArray(content)) throw new Error(`kie unexpected shape: ${JSON.stringify(data).slice(0, 500)}`);
+  try { data = JSON.parse(raw); } catch { throw new Error(`anthropic non-JSON: ${raw.slice(0, 500)}`); }
+  const content = data?.content;
+  if (!Array.isArray(content)) throw new Error(`anthropic unexpected shape: ${JSON.stringify(data).slice(0, 500)}`);
   return content.filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text || '').join('').trim();
 }
 
