@@ -601,19 +601,21 @@ export function V3_Chat({
   // StrictMode's intentional double-mount in dev (otherwise the seed messages
   // get appended twice).
   const seededRef = useRef(false);
+  // Intro seed. V2 cuts straight to the point ("let's make your song") instead
+  // of the v1 "become who you're meant to be" preamble.
+  const introMsgs = (): string[] => [
+    web
+      ? (variant === 'v2'
+          ? "Hey — let's make your first song, designed to help you create a life you love. 🎶"
+          : "Hey it's Lovify. It's time to become the person you were meant to be!")
+      : "Hey! I'm going to help you make your very first song. 🎶",
+    web ? "First, what's your name?" : "First — what should I call you?",
+  ];
   useEffect(() => {
     if (persisted && persisted.msgs.length) return; // resuming — keep transcript as-is
     if (seededRef.current) return; // already seeded (StrictMode remount) — don't replay
     seededRef.current = true;
-    botSay(
-      [
-        web
-          ? "Hey it's Lovify. It's time to become the person you were meant to be!"
-          : "Hey! I'm going to help you make your very first song. 🎶",
-        web ? "First, what's your name?" : "First — what should I call you?",
-      ],
-      'text',
-    );
+    botSay(introMsgs(), 'text');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -656,10 +658,18 @@ export function V3_Chat({
       data.current.name = fn;
       data.current.songAbout = 'My dream life'; // one journey — no topic picker
       setPhase('detail');
-      botSay([
-        `Hi ${fn}. Let's help you create a life you love. ✨`,
-        `Do you already have a vision of your dream — or is something bothering you we can solve? Either way, tell me everything.`,
-      ], 'text');
+      if (variant === 'v2') {
+        // V2: straight into Q1 (the intro already framed it) — no extra preamble.
+        botSay([
+          `Perfect, ${fn}. 🙌`,
+          `Tell me about the life you really want — or what's weighing on you right now. Just say it however it comes out.`,
+        ], 'text');
+      } else {
+        botSay([
+          `Hi ${fn}. Let's help you create a life you love. ✨`,
+          `Do you already have a vision of your dream — or is something bothering you we can solve? Either way, tell me everything.`,
+        ], 'text');
+      }
     } else if (phase === 'detail') {
       // Q1 answer: a dream OR a vent. Either way the AI flips it into
       // positive future-moments they can tap — a vent comes back as the new
@@ -667,27 +677,42 @@ export function V3_Chat({
       data.current.detail = value;
       setPhase('scene');
       flipReqRef.current = true;
-      const req = suggestFlippedDreams(value)
-        .then((r) => { setFlipIdeas(r.ideas); return r; })
-        .catch(() => null);
-      setMode('busy');
-      const tid = nid();
-      setMsgs((m) => [...m, { id: tid, role: 'bot', kind: 'typing' }]);
-      const timeout = new Promise<null>((res) => { window.setTimeout(() => res(null), 9000); });
-      Promise.race([req, timeout]).then((r) => {
-        setMsgs((m) => m.filter((x) => x.id !== tid));
+      if (variant === 'v2') {
+        // V2: no "thank you for sharing" beat and no busy wait — go STRAIGHT to a
+        // concrete, easy-to-answer Q2. The flip ideas still pre-warm in the
+        // background so the "Help me imagine" chips are ready if they want them.
+        suggestFlippedDreams(value).then((r) => setFlipIdeas(r.ideas)).catch(() => { /* static set covers it */ });
         botSay([
-          (r && r.reflection) || `Thank you for sharing that, ${name} — that's exactly what your song is made of. 🔥`,
-          `Now we're going to create a song that helps you bring this vision to life. 🎶 Tell me what's in that life — where you are, who's there, what people are saying. Type it in your own words, or tap ✨ Help me imagine for ideas 👇`,
+          `Now picture one perfect moment in that life. Where are you — and who's with you?`,
         ], 'text');
-      });
+      } else {
+        const req = suggestFlippedDreams(value)
+          .then((r) => { setFlipIdeas(r.ideas); return r; })
+          .catch(() => null);
+        setMode('busy');
+        const tid = nid();
+        setMsgs((m) => [...m, { id: tid, role: 'bot', kind: 'typing' }]);
+        const timeout = new Promise<null>((res) => { window.setTimeout(() => res(null), 9000); });
+        Promise.race([req, timeout]).then((r) => {
+          setMsgs((m) => m.filter((x) => x.id !== tid));
+          botSay([
+            (r && r.reflection) || `Thank you for sharing that, ${name} — that's exactly what your song is made of. 🔥`,
+            `Now we're going to create a song that helps you bring this vision to life. 🎶 Tell me what's in that life — where you are, who's there, what people are saying. Type it in your own words, or tap ✨ Help me imagine for ideas 👇`,
+          ], 'text');
+        });
+      }
     } else if (phase === 'scene') {
       data.current.scene = value;
       setPhase('why');
-      botSay([
-        `I can SEE it. 🌟`,
-        `Last one — why would that be so important to you, ${name}?`,
-      ], 'text');
+      if (variant === 'v2') {
+        // V2: straight to Q3, no "I can SEE it" filler bubble.
+        botSay([`Last one — why does this matter so much to you, ${name}?`], 'text');
+      } else {
+        botSay([
+          `I can SEE it. 🌟`,
+          `Last one — why would that be so important to you, ${name}?`,
+        ], 'text');
+      }
     } else if (phase === 'why') {
       data.current.why = value;
       // Pre-warm the personalized VISION options from everything they said —
@@ -699,10 +724,14 @@ export function V3_Chat({
           .catch(() => { /* static set covers it */ });
       }
       setPhase('photo');
-      botSay([
-        `That's the real you talking — and that's the heart of your song.`,
-        `Now add a photo of yourself, ${name} — and anyone else you want in the picture (partner, family, friends).`,
-      ], 'photo');
+      if (variant === 'v2') {
+        botSay([`Last thing — add a photo of you (and anyone else you want in your song's picture). 📸`], 'photo');
+      } else {
+        botSay([
+          `That's the real you talking — and that's the heart of your song.`,
+          `Now add a photo of yourself, ${name} — and anyone else you want in the picture (partner, family, friends).`,
+        ], 'photo');
+      }
     }
   };
 
@@ -974,15 +1003,7 @@ export function V3_Chat({
     setVisionIdeas(null);
     visionReqRef.current = false;
     onPersist?.({ msgs: [], phase: 'name', mode: 'busy', vibes: [], data: { ...data.current }, nextId: 0, done: false });
-    botSay(
-      [
-        web
-          ? "Hey it's Lovify. It's time to become the person you were meant to be!"
-          : "Hey! I'm going to help you make your very first song. 🎶",
-        web ? "First, what's your name?" : "First — what should I call you?",
-      ],
-      'text',
-    );
+    botSay(introMsgs(), 'text');
   };
 
   return (
