@@ -958,14 +958,16 @@ export function V3_Chat({
     setWritingLines(ANALYZE_LINES);
     setPhase('writing');
     setMode('writing');
-    describeArtistSound(value)
+    // NEVER hang the flow on the breakdown: race it against a 30s timeout so we
+    // always move on to the lyrics, even if the analysis stalls or is slow.
+    const timeout = new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 30000));
+    Promise.race([describeArtistSound(value).catch(() => null), timeout])
       .then((brief) => {
         if (brief) {
           data.current.artistBrief = brief;
           if (brief.styleDescription) data.current.soundStyle = brief.styleDescription;
         }
       })
-      .catch(() => { /* couldn't ID it — the default songwriter prompt covers it */ })
       // Stage 2: switch to "Writing lyrics for your song…" and generate them in
       // the analyzed style.
       .finally(() => { setWritingLines(WRITE_LINES_ARTIST); writeLyrics(true); });
