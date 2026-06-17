@@ -24,13 +24,14 @@ import {
 } from './screens';
 import { V3_Chat, type ChatPersist } from './OnboardingChat';
 import {
-  generateVisionWithFace, buildVisionPrompt, generateTwoSongs, sendSongEmail,
+  generateVisionWithFace, buildVisionPrompt, buildVisionPromptV2, generateTwoSongs, sendSongEmail,
   type GeneratedSong,
 } from '@/components/onboarding/v3/generation';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant, registerFunnel } from '@/lib/posthog';
+import { capturePostHogEvent, initPostHog, registerAdAttribution, registerFunnelVariant, registerFunnel, registerChatVariant } from '@/lib/posthog';
 import { getFunnelVariant } from '@/lib/funnelVariant';
+import { getChatVariant } from '@/lib/chatVariant';
 import { setFunnelOffer } from '@/lib/funnelOffer';
 import { trackPaywallShown, trackPaywallCompleted } from '@/lib/track';
 import { purchaseViaIAP } from '@/lib/iapFlow';
@@ -168,6 +169,9 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
   // mid-flow). App is always 'A'. Web rolls the 50/50 coin (gated by
   // B_TRAFFIC_SHARE until the upfront RC package is live).
   const [variant] = useState<'A' | 'B'>(() => (mode === 'web' ? getFunnelVariant() : 'A'));
+  // Song-chat A/B arm (v1 = current, v2 = the improved flow under test). Off by
+  // default (everyone v1); preview v2 with ?chat=v2. Tagged in PostHog below.
+  const [chatVariant] = useState<'v1' | 'v2'>(() => (mode === 'web' ? getChatVariant() : 'v1'));
 
   // Active step list. The standalone $99/year offer funnel (route /offer) uses
   // its own list; otherwise full app flow, web A, or web B. TOTAL + the switch()
@@ -206,11 +210,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     // Stamp WHICH funnel ('annual99' = /offer, else 'standard') on every event,
     // so PostHog can build /offer's per-step funnel in isolation.
     registerFunnel(offer || 'standard');
+    // Stamp the song-chat arm ('v1'/'v2') so the magic-moment funnel + checkout
+    // can be split by chat variant once the V2 test goes live.
+    registerChatVariant(chatVariant);
     if (!landedRef.current) {
       landedRef.current = true;
-      capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1', funnel_variant: variant, funnel: offer || 'standard' });
+      capturePostHogEvent('funnel_landed', { flow: 'onboarding_comeback1', funnel_variant: variant, funnel: offer || 'standard', chat_variant: chatVariant });
     }
-  }, [mode, variant, offer]);
+  }, [mode, variant, offer, chatVariant]);
 
   // ── Eagerly preload every illustration on mount (web) ──
   // On a phone over cellular, fetching each hero only when its screen mounts
@@ -428,9 +435,14 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
     capturePostHogEvent('vision_generation_started', { flow: 'onboarding_comeback1', has_face: !!face });
     // Prefer the user's explicitly-chosen image look; fall back to their
     // free-text scene. This makes the picture specific instead of a guess.
-    const prompt = visionScene
-      ? buildVisionPrompt({ songAbout, scene: visionScene, detailText })
-      : buildVisionPrompt({ songAbout, scene, detailText });
+    // V2 (the song-chat test) feeds the WHOLE story — incl. why it matters — into
+    // a richer, golden-hour-free prompt so the image is specific + theirs.
+    const why = stateRef.current?.why || '';
+    const prompt = chatVariant === 'v2'
+      ? buildVisionPromptV2({ songAbout, scene, detailText, why, visionScene })
+      : visionScene
+        ? buildVisionPrompt({ songAbout, scene: visionScene, detailText })
+        : buildVisionPrompt({ songAbout, scene, detailText });
     // The image model (FAL/nano-banana) can be slow or flaky — a single timeout
     // used to leave the user staring at the "you, living it" fallback forever.
     // Retry up to 3 attempts before giving up so a transient miss self-heals.
@@ -443,7 +455,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
         });
     };
     attempt(1);
-  }, [visionState]);
+  }, [visionState, chatVariant]);
 
   const startSongGen = useCallback((lyrics: string, title: string, style: string, voice: string) => {
     const key = `${title}|${lyrics.slice(0, 80)}`;
@@ -664,6 +676,7 @@ export function OnboardingComeback1Flow({ mode = 'app', startAt, offer }: { mode
       // INLINE, so the whole "wow" happens in one continuous chat experience.
       case 'song_chat': return <V3_Chat
         web={mode === 'web'}
+        variant={chatVariant}
         playing={playing}
         onToggleSound={() => setSound((s) => !s)}
         // Tapping the mic is often the first gesture that would unblock the

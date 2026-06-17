@@ -45,4 +45,9 @@ export const serverEnv = {
       process.env.STRIPE_WEBHOOK_SECRET
     );
   },
+  // Anthropic API key for the in-app Claude routes (artist-sound breakdown +
+  // vision scenes). Server-only — never import into a client component.
+  get anthropicApiKey() {
+    return required("ANTHROPIC_API_KEY", process.env.ANTHROPIC_API_KEY);
+  },
 };

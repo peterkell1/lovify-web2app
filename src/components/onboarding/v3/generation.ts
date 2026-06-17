@@ -60,6 +60,86 @@ export async function sendSongEmail(req: { email: string; title: string; songUrl
   }
 }
 
+// ─── 0. Voice transcription (server-side) ───────────────────────
+// The on-device SpeechRecognition mic is unavailable in most in-app webviews
+// (iOS Instagram/Facebook), which is where the ad traffic lives — so the V2
+// voice-first capture records audio (MediaRecorder) and sends it here instead.
+// We post the clip as a base64 data URL (same shape as the vision face photo)
+// so it rides the existing authedFetch path; the `transcribe-audio` edge fn
+// decodes it and forwards to the speech-to-text provider (e.g. Whisper),
+// returning { text }.
+export async function transcribeAudio(audio: Blob): Promise<string> {
+  // Read the recorded blob to a base64 data URL for JSON transport.
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ''));
+    fr.onerror = () => reject(new Error('audio read failed'));
+    fr.readAsDataURL(audio);
+  });
+  const res = await authedFetch('transcribe-audio', { audio: dataUrl, mimeType: audio.type || 'audio/webm' });
+  if (!res.ok) throw new Error(`transcribe-audio failed (${res.status})`);
+  const data = await res.json();
+  const text = String(data?.text || data?.transcript || '').trim();
+  if (!text) throw new Error('empty transcript');
+  return text;
+}
+
+// ─── 0b. Vision scenes (V2) ─────────────────────────────────────
+// Turns the visitor's OWN answers into 3 specific, cinematic vision scenes of
+// them living that dream (via the suggest-vision-scenes edge fn). Each scene's
+// `prompt` becomes the brief for their vision image when they pick it. Replaces
+// the unreliable/generic suggest-comeback-ideas path for V2.
+export async function suggestVisionScenes(a: { dream: string; scene: string; why: string }): Promise<{ e: string; t: string; prompt: string }[]> {
+  // In-app API route (server-side Claude) — deploys with the app, no edge fn.
+  const res = await fetch('/api/suggest-vision-scenes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dream: a.dream, scene: a.scene, why: a.why }),
+  });
+  if (!res.ok) throw new Error(`suggest-vision-scenes failed (${res.status})`);
+  const data = await res.json();
+  const v = (Array.isArray(data?.visions) ? data.visions : [])
+    .map((x: { emoji?: string; title?: string; prompt?: string }) => ({
+      e: String(x.emoji || '✨').slice(0, 4),
+      t: String(x.title || '').trim().slice(0, 60),
+      prompt: String(x.prompt || '').trim().slice(0, 600),
+    }))
+    .filter((x: { t: string; prompt: string }) => x.t && x.prompt)
+    .slice(0, 3);
+  if (!v.length) throw new Error('empty visions');
+  return v;
+}
+
+// ─── 0c. Artist/song reference → style + lyric blueprint (V2) ────
+// The optional "a song you'd love this to sound like?" question. Reverse-
+// engineers the reference into a name/voice-free production brief + lyric
+// rulebook (via the describe-artist-sound edge fn). styleDescription drives the
+// music engine; lyricalFormula + structuralDynamics + styleSpecificTraps shape
+// the songwriter. Returns null when the reference can't be identified.
+export interface ArtistBrief {
+  styleDescription: string;
+  lyricalFormula: string;
+  structuralDynamics: string;
+  styleSpecificTraps: string[];
+}
+export async function describeArtistSound(ref: string): Promise<ArtistBrief | null> {
+  // In-app API route (server-side Claude) — deploys with the app, no edge fn.
+  const res = await fetch('/api/describe-artist-sound', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ artistOrSong: ref }),
+  });
+  if (!res.ok) throw new Error(`describe-artist-sound failed (${res.status})`);
+  const data = await res.json();
+  if (!data || data.notFound) return null;
+  const brief: ArtistBrief = {
+    styleDescription: String(data.styleDescription || '').slice(0, 1000),
+    lyricalFormula: String(data.lyricalFormula || '').slice(0, 1400),
+    structuralDynamics: String(data.structuralDynamics || '').slice(0, 500),
+    styleSpecificTraps: Array.isArray(data.styleSpecificTraps) ? data.styleSpecificTraps.map(String).slice(0, 3) : [],
+  };
+  if (!brief.styleDescription && !brief.lyricalFormula) return null;
+  return brief;
+}
+
 // ─── 1. Sound styles ────────────────────────────────────────────
 // suggest-song-styles ← { conversationContext, previouslySuggestedVibes?, regenerateCount? }
 //                     → { vibes: [{ name, description, genre, emoji }], source }
@@ -289,6 +369,42 @@ export function buildVisionPrompt(a: { songAbout: string; scene: string; detailT
   ].join(' ');
 }
 
+/** V2 vision brief — the song-chat V2 test.
+ *
+ * The whole point of the vision image is to let someone SEE themselves living
+ * the exact dream they just described, so it has to be specific and theirs, not
+ * a generic "happy, golden-hour" stock mood (the #1 reason v1 images fell flat).
+ *
+ * So this feeds the model the FULL story, not just the scene:
+ *   • dream      — the specific, picked vision look (or their own words)
+ *   • specifics  — the concrete details they typed ("dolphins jumping by my deck")
+ *   • feeling    — WHY it matters, so the emotion + identity shows on their face
+ * and deliberately drops "golden hour / vision-board" — the lighting should be
+ * whatever is TRUE to that specific moment, not a preset. Face fidelity is hard
+ * non-negotiable: this only lands if it's unmistakably them. */
+export function buildVisionPromptV2(a: {
+  songAbout?: string; scene?: string; detailText?: string; why?: string; visionScene?: string;
+}): string {
+  // Strip preset "golden hour" phrasing out of the picked look so it can't fight
+  // the true-to-scene lighting we ask for below (some idea prompts bake it in).
+  const clean = (s: string) => (s || '').replace(/\bgolden[\s-]?hour\b/gi, '').replace(/\bgolden light\b/gi, '').replace(/\s+/g, ' ').trim();
+  const dream = clean(a.visionScene || a.scene || a.detailText || a.songAbout || 'living their dream life');
+  const det = (a.detailText || '').trim();
+  const specifics = det && clean(det) !== dream
+    ? ` Specific details in their own words: ${det}.` : '';
+  const feeling = (a.why || '').trim()
+    ? ` Why this matters to them: ${(a.why || '').trim()} — let that emotion read on their face and in the mood of the shot.` : '';
+  return [
+    `Photorealistic, cinematic vertical (9:16) photograph of the exact person in the reference photo, fully living this dream: ${dream}.`,
+    specifics,
+    feeling,
+    ` They are unmistakably the hero of the frame — present and immersed in the moment, living it rather than posing.`,
+    ` Keep their face completely true to the reference photo: same identity, features, and age — it must clearly be them.`,
+    ` Use real, true-to-scene natural lighting that fits this exact moment (NOT a golden-hour preset), with rich depth and lifelike detail.`,
+    ` Immersive and emotional, like a still frame from a film of their life. Absolutely no text, captions, watermark, or logos.`,
+  ].join('').replace(/\s+/g, ' ').trim();
+}
+
 // ─── 4. Song (Mureka via router) + polling ──────────────────────
 // start:  generate-song-router ← { lyrics, title, style, vocalGender } → { taskId }
 // poll:   generate-song-router ← { taskId } → { status, songs:[{title,audio_url,image_url,...}] }
@@ -305,6 +421,21 @@ export interface GeneratedSong {
   streaming?: boolean;
 }
 
+/** Suno rejects very long style strings. The V2 artist blueprint can be ~1000
+ *  chars of comma-separated tags (front-loaded with the most distinctive ones),
+ *  so trim to a safe length, cutting at a tag boundary so we never send a
+ *  half-word. v1 styles are short and pass through untouched. */
+function capStyle(s: string): string {
+  const t = (s || '').trim();
+  const MAX = 200;
+  if (t.length <= MAX) return t;
+  const cut = t.slice(0, MAX);
+  const lastComma = cut.lastIndexOf(',');
+  const lastSemi = cut.lastIndexOf(';');
+  const boundary = Math.max(lastComma, lastSemi);
+  return (boundary > 80 ? cut.slice(0, boundary) : cut).trim();
+}
+
 export async function startSong(req: {
   lyrics: string; title: string; style: string; voice: string; model?: string;
 }): Promise<string> {
@@ -315,7 +446,7 @@ export async function startSong(req: {
   const res = await authedFetch('generate-song-router', {
     lyrics: req.lyrics,
     title: req.title,
-    style: req.style,
+    style: capStyle(req.style),
     vocalGender,
     ...(req.model ? { model: req.model } : {}),
   });
