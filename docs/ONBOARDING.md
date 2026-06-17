@@ -125,19 +125,49 @@ You never publish anything yourself. You make drafts; Peter approves them.
 
 ---
 
-## All the links
+## Every tool we use — and how you get access
+
+Get your **own login** for each (Peter invites you **by email** — you don't share
+his password). Watch your inbox for invite emails and accept them.
+
+**🟢 Need these to start (Day 1):**
+
+| Tool | What it's for | Where to log in | How Peter adds you |
+|---|---|---|---|
+| **GitHub** | The code (Claude Code opens it) | https://github.com | Invites your username to `peterkell1/lovify-web2app` |
+| **Claude** (for Claude Code) | Your AI helper | https://claude.ai | You make your own Pro/Max account |
+| **The `.env.local` keys file** | Runs the site on your laptop | (a file, not a login) | Sends it to you via 1Password |
+
+**🟡 You'll want these soon:**
+
+| Tool | What it's for | Where to log in | How Peter adds you |
+|---|---|---|---|
+| **Vercel** | Hosting + live deploys + preview links | https://vercel.com | Invites you to the project/team |
+| **PostHog** | Analytics — how the funnel performs | https://us.posthog.com | Org → Members → Invite (project: 404083) |
+| **Supabase** | The database + backend (project: Lovify-dev) | https://supabase.com/dashboard | Org → Team → Invite |
+
+**🟣 As you need them (specialized):**
+
+| Tool | What it's for | Where to log in | How Peter adds you |
+|---|---|---|---|
+| **RevenueCat** | Subscriptions / payments | https://app.revenuecat.com | Project → Collaborators → Invite (project: Lovify Music) |
+| **Anthropic** | The Claude AI key the song chat uses | https://console.anthropic.com | Console → Members → Invite |
+| **Kie.ai** | Song generation (Suno) | https://kie.ai | Shared login via 1Password (no team seats) |
+| **Meta Business** | Facebook pixel + ads tracking | https://business.facebook.com | Business Settings → People → Add |
+
+**Quick links (no login needed):**
 
 | Link | What it is |
 |---|---|
-| **https://claude.ai/code** | Claude Code — get the desktop app + where you work |
+| **https://claude.ai/code** | Claude Code — desktop app + where you work |
 | **https://github.com/peterkell1/lovify-web2app** | The project |
 | **`http://localhost:3000/offer/v2-chat`** | The song page you preview (when the project is running) |
 | **https://demo.trylovify.com/offer** | The LIVE funnel — do NOT edit V1 |
 
-**Dashboards (login as needed — ask Peter to invite you):** Vercel
-(https://vercel.com), Supabase (https://supabase.com/dashboard), PostHog
-(https://us.posthog.com), RevenueCat (https://app.revenuecat.com), Anthropic
-(https://console.anthropic.com).
+> You don't need *all* of these to start — GitHub + your Claude account + the keys
+> file are enough to begin editing the song page. The rest unlock as your tasks
+> need them. If something says "you don't have access," that's your cue to ask
+> Peter for that one.
 
 ---
 
