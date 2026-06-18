@@ -14,6 +14,16 @@ export function useAuth() {
       });
       return { error: error ?? undefined };
     },
+    // DEV NOTE: requires the Google provider enabled in Supabase
+    // (Auth → Providers → Google, with client id/secret).
+    signInWithGoogle: async (redirectTo?: string): Promise<{ error?: Error }> => {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: redirectTo ? { redirectTo: `${origin}${redirectTo}` } : undefined,
+      });
+      return { error: error ?? undefined };
+    },
     signUpWithEmail: async (
       email: string,
       password: string,
